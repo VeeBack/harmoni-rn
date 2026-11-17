@@ -46,8 +46,8 @@ export function TopBar({
     <View pointerEvents="box-none" style={[styles.bar, { paddingTop: insets.top, height: TOPBAR + insets.top }]}>
       <LinearGradient
         pointerEvents="none"
-        colors={["rgba(18,18,18,0.97)", "rgba(18,18,18,0.88)", "rgba(18,18,18,0)"]}
-        locations={[0, 0.62, 1]}
+        colors={["rgba(18,18,18,0.98)", "rgba(18,18,18,0.95)", "rgba(18,18,18,0.75)", "rgba(18,18,18,0)"]}
+        locations={[0, 0.55, 0.78, 1]}
         style={[StyleSheet.absoluteFill, { bottom: -28 }]}
       />
       {back ? (

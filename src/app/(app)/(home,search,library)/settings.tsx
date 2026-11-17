@@ -240,9 +240,19 @@ function useKvSwitch(key: string, fallback: boolean) {
 
 function PlaybackGroup() {
   const [keepAwake, setKeepAwake] = useKvSwitch("settings.keepAwake", false);
+  const [smooth, setSmooth] = useKvSwitch("settings.smoothPause", true);
   return (
     <Group title="Playback" note="These are for this phone, so your phone and computer can each have their own.">
-      <Row first title="Keep the screen on for lyrics" note="While the lyrics are showing, the screen won't dim or lock.">
+      <Row first title="Smooth play and pause" note="Eases the music in and out instead of cutting it.">
+        <Switch
+          value={smooth}
+          onChange={(v) => {
+            setSmooth(v);
+            Native.setSmooth(v);
+          }}
+        />
+      </Row>
+      <Row title="Keep the screen on for lyrics" note="While the lyrics are showing, the screen won't dim or lock.">
         <Switch value={keepAwake} onChange={setKeepAwake} />
       </Row>
       <Row title="Load the next song early" note="The next song starts straight away, even on a slow connection. Harmoni always does this on Android.">

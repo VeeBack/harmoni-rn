@@ -98,6 +98,7 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   stop(): Promise<void>;
   retry(): Promise<void>;
   pauseAtEndOfSong(on: boolean): Promise<void>;
+  setSmooth(on: boolean): void;
 
   setLikedIds(json: string): void;
   setLiked(id: string, liked: boolean): void;

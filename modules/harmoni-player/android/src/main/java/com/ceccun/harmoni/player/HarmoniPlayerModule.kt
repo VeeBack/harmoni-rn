@@ -42,6 +42,26 @@ class HarmoniPlayerModule : Module() {
   private val pending = mutableListOf<(ExoPlayer) -> Unit>()
   private var foreground = true
 
+  // Smooth play and pause: ease the volume in (260 ms) and out (180 ms) instead of cutting.
+  private var smooth = true
+  private var targetVolume = 1f
+  private var fade: android.animation.ValueAnimator? = null
+
+  private fun fadeTo(p: ExoPlayer, to: Float, ms: Long, then: (() -> Unit)? = null) {
+    fade?.cancel()
+    fade = android.animation.ValueAnimator.ofFloat(p.volume, to).apply {
+      duration = ms
+      interpolator = android.view.animation.LinearInterpolator()
+      addUpdateListener { p.volume = it.animatedValue as Float }
+      addListener(object : android.animation.AnimatorListenerAdapter() {
+        private var cancelled = false
+        override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
+        override fun onAnimationEnd(animation: android.animation.Animator) { if (!cancelled) then?.invoke() }
+      })
+      start()
+    }
+  }
+
   // Snapshot read synchronously from JS.
   @Volatile private var snapshot = JSONObject()
 
@@ -484,11 +504,33 @@ class HarmoniPlayerModule : Module() {
       withPlayer { p ->
         if (p.playbackState == Player.STATE_IDLE) p.prepare()
         if (p.playbackState == Player.STATE_ENDED) p.seekTo(p.currentMediaItemIndex, 0)
-        p.play()
+        if (smooth && !p.isPlaying) {
+          fade?.cancel()
+          p.volume = 0f
+          p.play()
+          fadeTo(p, targetVolume, 260)
+        } else {
+          p.play()
+        }
       }
     }.runOnQueue(Queues.MAIN)
 
-    AsyncFunction("pause") { withPlayer { it.pause() } }.runOnQueue(Queues.MAIN)
+    AsyncFunction("pause") {
+      withPlayer { p ->
+        if (smooth && p.isPlaying) {
+          fadeTo(p, 0f, 180) {
+            p.pause()
+            p.volume = targetVolume
+          }
+        } else {
+          fade?.cancel()
+          p.pause()
+          p.volume = targetVolume
+        }
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    Function("setSmooth") { on: Boolean -> smooth = on }
 
     AsyncFunction("seekTo") { ms: Double -> withPlayer { it.seekTo(ms.toLong().coerceAtLeast(0)) } }.runOnQueue(Queues.MAIN)
 
@@ -521,7 +563,13 @@ class HarmoniPlayerModule : Module() {
       }
     }.runOnQueue(Queues.MAIN)
 
-    AsyncFunction("setVolume") { volume: Double -> withPlayer { it.volume = volume.toFloat().coerceIn(0f, 1f) } }.runOnQueue(Queues.MAIN)
+    AsyncFunction("setVolume") { volume: Double ->
+      withPlayer {
+        fade?.cancel()
+        targetVolume = volume.toFloat().coerceIn(0f, 1f)
+        it.volume = targetVolume
+      }
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stop") {
       PlaybackService.instance?.player?.let { p ->

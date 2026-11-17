@@ -1,3 +1,6 @@
+import * as Network from "expo-network";
+import Native from "harmoni-player";
+import { kv } from "@/lib/storage";
 import { Tabs } from "expo-router/js-tabs";
 import { useEffect } from "react";
 import { View } from "react-native";
@@ -19,12 +22,24 @@ export default function AppLayout() {
   const refreshMe = useSession((s) => s.refreshMe);
 
   useEffect(() => {
+    Native.setSmooth(kv.get("settings.smoothPause", true));
     restorePlayer();
     refreshMe();
     useLibrary.getState().load();
     useDownloads.getState().load();
     flushPendingListens();
   }, [refreshMe]);
+
+  // Say so when the connection drops; downloads keep playing.
+  useEffect(() => {
+    let wasOnline = true;
+    const sub = Network.addNetworkStateListener((st) => {
+      const online = !!st.isConnected && st.isInternetReachable !== false;
+      if (wasOnline && !online) toast("You're offline. Downloaded songs still play.");
+      wasOnline = online;
+    });
+    return () => sub.remove();
+  }, []);
 
   const linkOnHere = useLinkPref((p) => p.on);
   const linkOn = (me?.server.features.link ?? false) && linkOnHere && process.env.EXPO_PUBLIC_DISABLE_LINK !== "1";
