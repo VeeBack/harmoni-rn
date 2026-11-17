@@ -79,6 +79,8 @@ jobs:
       - name: More swap
         # React Native's C++ builds are memory hungry; extra swap keeps the runner alive.
         run: |
+          # systemd-oomd SIGTERMs (exit 143) builds under memory pressure; the job has the machine to itself.
+          sudo systemctl stop systemd-oomd || true
           sudo swapoff -a || true
           sudo fallocate -l 10G /swapfile
           sudo chmod 600 /swapfile
