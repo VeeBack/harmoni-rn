@@ -4,6 +4,7 @@ import { Keyboard, TextInput, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
 import type { ArtistCard, Song } from "@/api/types";
+import { useArtistImage } from "@/api/token";
 import { artistLine } from "@/lib/format";
 import { inkFor, useArtworkColors, usePlayback } from "@/player/hooks";
 import { player } from "@/player/player";
@@ -207,13 +208,13 @@ function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
   );
 }
 
-function HeroCard({ art, round, title, meta, onPress, playing, onPlay }: { art?: string; round?: boolean; title: string; meta: string; onPress: () => void; playing: boolean; onPlay: () => void }) {
+function HeroCard({ art, source, round, title, meta, onPress, playing, onPlay }: { art?: string; source?: { uri: string; headers?: Record<string, string> }; round?: boolean; title: string; meta: string; onPress: () => void; playing: boolean; onPlay: () => void }) {
   const theme = useArtworkColors(art);
   const { ink, inkMuted } = theme ? inkFor(theme) : { ink: colors.text, inkMuted: colors.text2 };
   return (
     <Press onPress={onPress} feedback="tap" scaleTo={0.98} style={{ padding: 20, borderRadius: radius.xl, backgroundColor: theme?.color ?? colors.surface2, gap: 20 }}>
       <View style={{ elevation: round ? 10 : 0, shadowColor: "#000", alignSelf: "flex-start", borderRadius: round ? 68 : 16 }}>
-        <Artwork url={art} size={136} round={round} radius={16} fallback={round ? "user" : "music"} />
+        <Artwork url={art} source={source} size={136} round={round} radius={16} fallback={round ? "user" : "music"} />
       </View>
       <View style={{ paddingRight: 64, gap: 4 }}>
         <Text size={28} weight={700} color={ink} numberOfLines={2} style={{ letterSpacing: -0.56, lineHeight: 31 }}>
@@ -241,9 +242,11 @@ function TopArtist({ artist, results }: { artist: ArtistCard & { cover?: string 
   const pb = usePlayback();
   const theirs = results.filter((s) => s.artists.some((a) => a.id === artist.id));
   const current = !!pb.song && theirs.some((s) => s.id === pb.song!.id);
+  const proxied = useArtistImage(artist.imageUrl ? undefined : artist.id);
   return (
     <HeroCard
       art={artist.imageUrl ?? artist.cover}
+      source={proxied}
       round
       title={artist.name}
       meta="Artist"

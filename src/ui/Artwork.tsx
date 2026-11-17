@@ -22,6 +22,7 @@ export const Artwork = memo(function Artwork({
   fallback = "music",
   px,
   priority,
+  source,
 }: {
   url?: string;
   size?: number;
@@ -31,14 +32,17 @@ export const Artwork = memo(function Artwork({
   fallback?: IconName;
   px?: number;
   priority?: "low" | "normal" | "high";
+  /** Overrides `url`, e.g. an authenticated proxy image; `url` is the fallback while it loads or if it fails. */
+  source?: { uri: string; headers?: Record<string, string> };
 }) {
   const br = round ? 9999 : radius;
   const dim = size != null ? { width: size, height: size } : { width: "100%" as const, aspectRatio: 1 };
   return (
     <View style={[dim, { borderRadius: br, backgroundColor: colors.surface2, overflow: "hidden" }, style]}>
-      {url ? (
+      {url || source ? (
         <Image
-          source={{ uri: sized(url, px ?? (size ? Math.round(size * 3) : 544)) }}
+          source={source ? [source] : { uri: sized(url, px ?? (size ? Math.round(size * 3) : 544)) }}
+          placeholder={source && url ? { uri: sized(url, 200) } : undefined}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={160}

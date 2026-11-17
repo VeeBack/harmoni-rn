@@ -24,8 +24,15 @@ export const deviceId: string = (() => {
 
 export const deviceKind: DeviceKind = Device.deviceType === Device.DeviceType.TABLET ? "tablet" : "phone";
 
+/** The phone's own name (Settings › About), else its model, else "Android phone". */
 export function deviceName(): string {
-  return kv.get<string | null>("link.name", null) || Device.modelName || "Android phone";
+  const custom = kv.get<string | null>("link.name", null);
+  if (custom) return custom;
+  const own = Device.deviceName?.trim();
+  if (own && !/^sdk_|^generic|_/.test(own)) return own.slice(0, 60);
+  const model = Device.modelName?.trim();
+  if (model && !/^sdk_|^generic|_/.test(model)) return model.slice(0, 60);
+  return deviceKind === "tablet" ? "Android tablet" : "Android phone";
 }
 
 export function setDeviceName(name: string) {

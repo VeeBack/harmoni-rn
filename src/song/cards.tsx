@@ -4,6 +4,7 @@ import { ScrollView, View, useWindowDimensions } from "react-native";
 
 import { errorMessage } from "@/api/client";
 import { Api } from "@/api/endpoints";
+import { useArtistImage } from "@/api/token";
 import type { ArtistCard, Song, SpiceCard } from "@/api/types";
 import { plural } from "@/lib/format";
 import { usePlayback } from "@/player/hooks";
@@ -147,9 +148,10 @@ export function artistImage(a: ArtistCard): string | undefined {
 }
 
 export const ArtistChip = memo(function ArtistChip({ artist, fallback }: { artist: ArtistCard; fallback?: string }) {
+  const proxied = useArtistImage(artist.imageUrl ? undefined : artist.id);
   return (
     <Press onPress={() => router.push(`/artist/${artist.id}`)} feedback="tap" scaleTo={0.96} style={{ width: 104, gap: 10, alignItems: "center" }} accessibilityLabel={artist.name}>
-      <Artwork url={artist.imageUrl ?? fallback} size={104} round fallback="user" />
+      <Artwork url={artist.imageUrl ?? fallback} source={proxied} size={104} round fallback="user" />
       <Text size={13} weight={500} numberOfLines={1} align="center" style={{ width: 104 }}>
         {artist.name}
       </Text>
