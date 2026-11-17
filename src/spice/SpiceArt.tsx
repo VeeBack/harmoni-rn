@@ -6,6 +6,8 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import { Text } from "@/ui/Text";
 
+const GRAIN = require("../../assets/images/grain.png");
+
 function hash(name: string) {
   let h = 2166136261;
   const s = name.toLowerCase();
@@ -63,6 +65,8 @@ export const SpiceArt = memo(function SpiceArt({ name, covers = [], label = true
         <Rect width="100%" height="100%" fill={`url(#${id}d)`} />
       </Svg>
       <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.45)"]} locations={[0.45, 1]} style={StyleSheet.absoluteFill} />
+      {/* Grain and powder specks, like the web's noise layers. */}
+      <Image source={GRAIN} style={[StyleSheet.absoluteFill, { opacity: 0.9 }]} contentFit="cover" />
       {label && w > 0 ? (
         <View style={{ position: "absolute", left: w * 0.08, right: clearRight ? w * 0.28 : w * 0.08, bottom: w * 0.07, gap: w * 0.015 }}>
           <Text size={Math.max(8, w * 0.055)} weight={700} color="rgba(255,255,255,0.85)" style={{ letterSpacing: Math.max(8, w * 0.055) * 0.24, lineHeight: Math.max(8, w * 0.055) * 1.2 }}>
