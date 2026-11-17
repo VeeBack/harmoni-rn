@@ -20,16 +20,21 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import org.json.JSONObject
 
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
   companion object {
     private const val TAG = "HarmoniPlayback"
     const val ACTION_LIKE = "harmoni.like"
@@ -47,7 +52,8 @@ class PlaybackService : MediaSessionService() {
 
   lateinit var player: ExoPlayer
     private set
-  private var session: MediaSession? = null
+  private var session: MediaLibrarySession? = null
+  private val background by lazy { MoreExecutors.listeningDecorator(Core.io) }
   private val main = Handler(Looper.getMainLooper())
   private var authRetries = 0
   // Saves the playhead every 10 s while playing, so a killed app resumes close to where it was.
@@ -77,7 +83,7 @@ class PlaybackService : MediaSessionService() {
       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
       putExtra("harmoni.openPlayer", true)
     }
-    val builder = MediaSession.Builder(this, player).setCallback(SessionCallback())
+    val builder = MediaLibrarySession.Builder(this, player, SessionCallback())
     if (open != null) {
       builder.setSessionActivity(
         PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -98,7 +104,7 @@ class PlaybackService : MediaSessionService() {
     refreshButtons()
   }
 
-  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
   override fun onTaskRemoved(rootIntent: Intent?) {
     if (!isPlaybackOngoing) pauseAllPlayersAndStopSelf()
@@ -184,7 +190,7 @@ class PlaybackService : MediaSessionService() {
     }
   }
 
-  private inner class SessionCallback : MediaSession.Callback {
+  private inner class SessionCallback : MediaLibrarySession.Callback {
     override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
       return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
         .setAvailableSessionCommands(
@@ -207,12 +213,85 @@ class PlaybackService : MediaSessionService() {
       return super.onCustomCommand(session, controller, customCommand, args)
     }
 
+    // --- Android Auto and other media browsers ---
+
+    override fun onGetLibraryRoot(
+      session: MediaLibrarySession,
+      browser: MediaSession.ControllerInfo,
+      params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(LibraryResult.ofItem(Library.root(), params))
+
+    override fun onGetChildren(
+      session: MediaLibrarySession,
+      browser: MediaSession.ControllerInfo,
+      parentId: String,
+      page: Int,
+      pageSize: Int,
+      params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = background.submit<LibraryResult<ImmutableList<MediaItem>>> {
+      val all = Library.children(parentId)
+      val from = (page * pageSize).coerceAtMost(all.size)
+      LibraryResult.ofItemList(ImmutableList.copyOf(all.subList(from, minOf(all.size, from + pageSize))), params)
+    }
+
+    override fun onGetItem(
+      session: MediaLibrarySession,
+      browser: MediaSession.ControllerInfo,
+      mediaId: String,
+    ): ListenableFuture<LibraryResult<MediaItem>> {
+      val item = Library.item(mediaId)
+      return Futures.immediateFuture(if (item != null) LibraryResult.ofItem(item, null) else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
+    }
+
+    private val searches = java.util.concurrent.ConcurrentHashMap<String, List<MediaItem>>()
+
+    override fun onSearch(
+      session: MediaLibrarySession,
+      browser: MediaSession.ControllerInfo,
+      query: String,
+      params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<Void>> = background.submit<LibraryResult<Void>> {
+      val results = Library.search(query)
+      searches[query] = results
+      session.notifySearchResultChanged(browser, query, results.size, params)
+      LibraryResult.ofVoid()
+    }
+
+    override fun onGetSearchResult(
+      session: MediaLibrarySession,
+      browser: MediaSession.ControllerInfo,
+      query: String,
+      page: Int,
+      pageSize: Int,
+      params: LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+      val all = searches[query] ?: emptyList()
+      val from = (page * pageSize).coerceAtMost(all.size)
+      return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(all.subList(from, minOf(all.size, from + pageSize))), params))
+    }
+
+    /** Playing one song from a browsed list queues the whole list from there. */
+    override fun onSetMediaItems(
+      mediaSession: MediaSession,
+      controller: MediaSession.ControllerInfo,
+      mediaItems: MutableList<MediaItem>,
+      startIndex: Int,
+      startPositionMs: Long,
+    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+      val expanded = Library.expand(mediaItems)
+      if (expanded != null) {
+        return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(expanded.first, expanded.second, 0))
+      }
+      val resolved = mediaItems.map { if (it.mediaId.startsWith("aa|")) Library.item(it.mediaId) ?: it else Core.resolve(it) }
+      return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs))
+    }
+
     override fun onAddMediaItems(
       mediaSession: MediaSession,
       controller: MediaSession.ControllerInfo,
       mediaItems: MutableList<MediaItem>,
     ): ListenableFuture<MutableList<MediaItem>> =
-      Futures.immediateFuture(mediaItems.map { Core.resolve(it) }.toMutableList())
+      Futures.immediateFuture(mediaItems.map { if (it.mediaId.startsWith("aa|")) Library.item(it.mediaId) ?: it else Core.resolve(it) }.toMutableList())
 
     @Deprecated("Media3 keeps calling this for older controllers")
     override fun onPlaybackResumption(
