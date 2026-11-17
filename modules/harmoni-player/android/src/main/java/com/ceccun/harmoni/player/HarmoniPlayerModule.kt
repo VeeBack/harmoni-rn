@@ -510,6 +510,10 @@ class HarmoniPlayerModule : Module() {
       QueueStore.clear(context)
     }.runOnQueue(Queues.MAIN)
 
+    AsyncFunction("pauseAtEndOfSong") { on: Boolean ->
+      withPlayer { it.pauseAtEndOfMediaItems = on }
+    }.runOnQueue(Queues.MAIN)
+
     AsyncFunction("retry") {
       withPlayer { p -> p.prepare(); p.play() }
     }.runOnQueue(Queues.MAIN)
@@ -547,6 +551,22 @@ class HarmoniPlayerModule : Module() {
 
     AsyncFunction("getDownloadSize") { promise: Promise ->
       Core.io.execute { promise.resolve(runCatching { Core.downloadCache.cacheSpace.toDouble() }.getOrDefault(0.0)) }
+    }
+
+    // --- home screen widget ---
+
+    Function("canPinWidget") {
+      android.appwidget.AppWidgetManager.getInstance(context).isRequestPinAppWidgetSupported
+    }
+
+    Function("hasWidget") {
+      android.appwidget.AppWidgetManager.getInstance(context)
+        .getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java)).isNotEmpty()
+    }
+
+    AsyncFunction("pinWidget") {
+      android.appwidget.AppWidgetManager.getInstance(context)
+        .requestPinAppWidget(ComponentName(context, NowPlayingWidget::class.java), null, null)
     }
 
     // --- artwork colours ---

@@ -46,8 +46,8 @@ export function TopBar({
     <View pointerEvents="box-none" style={[styles.bar, { paddingTop: insets.top, height: TOPBAR + insets.top }]}>
       <LinearGradient
         pointerEvents="none"
-        colors={["rgba(18,18,18,0.92)", "rgba(18,18,18,0.7)", "rgba(18,18,18,0)"]}
-        locations={[0, 0.6, 1]}
+        colors={["rgba(18,18,18,0.97)", "rgba(18,18,18,0.88)", "rgba(18,18,18,0)"]}
+        locations={[0, 0.62, 1]}
         style={[StyleSheet.absoluteFill, { bottom: -28 }]}
       />
       {back ? (
@@ -56,7 +56,7 @@ export function TopBar({
         </IconButton>
       ) : null}
       {center ?? (
-        <View style={{ flex: 1, justifyContent: "center" }}>
+        <View style={{ flex: 1, alignSelf: "stretch", justifyContent: "center" }}>
           {back && title ? null : (
             <Animated.View style={wordStyle}>
               <Press feedback="tap" scaleTo={0.97} onPress={() => router.navigate("/")} style={{ alignSelf: "flex-start" }} accessibilityLabel="Harmoni, home">

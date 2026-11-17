@@ -1,4 +1,5 @@
 import Native, { type DownloadEvent } from "harmoni-player";
+import { PermissionsAndroid, Platform } from "react-native";
 import { create } from "zustand";
 
 import type { Song } from "@/api/types";
@@ -75,7 +76,16 @@ Native.addListener("onTick", (t) => {
 
 const pendingSongs = new Map<string, Song>();
 
+let asked = false;
+/** Download progress shows as a notification; Android 13+ asks for it once. */
+function askForNotifications() {
+  if (asked || Platform.OS !== "android" || (Platform.Version as number) < 33) return;
+  asked = true;
+  PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
+}
+
 export function download(songs: Song[]) {
+  askForNotifications();
   const fresh = songs.filter((s) => {
     const cur = useDownloads.getState().items[s.id];
     return !cur || cur.state === "failed" || cur.state === "stopped";

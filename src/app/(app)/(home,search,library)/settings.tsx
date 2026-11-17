@@ -205,6 +205,11 @@ export default function Settings() {
         <Row first title="Haptics" note="Little taps under your finger as you play, skip and pick.">
           <HapticsSwitch />
         </Row>
+        {Native.canPinWidget() ? (
+          <Row title="Home screen widget" note="What's playing, with play, skip and back, right on your home screen.">
+            <SmallButton label="Add" icon="plus" onPress={() => Native.pinWidget()} />
+          </Row>
+        ) : null}
         <Row title="Server" note={serverOrigin()?.replace(/^https?:\/\//, "")} />
         <Row title="Version" note={`Harmoni for Android ${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`} />
       </Group>

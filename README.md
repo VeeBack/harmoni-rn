@@ -1,56 +1,55 @@
-# Welcome to your Expo app 👋
+# Harmoni for Android
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A native Android app for [Harmoni](../harmoni-next) servers, built with React Native (Expo SDK 58) and a local Kotlin module for playback. It works with any Harmoni server that supports app sign-in (OAuth): you type the server's address, sign in on the server's own page in a Custom Tab, and come back signed in.
 
-## Get started
+It does everything the web app does (Home, Search, Library, Liked Songs, Recently Played, playlists, albums, artists, Spices and the seed picker, synced lyrics, the queue, autoplay, Harmoni Link, invites, Apple Music import, account settings), plus things only an app can:
 
-1. Install dependencies
+- **Background playback** with a Media3 `MediaSessionService`: notification, lock screen and Bluetooth controls, a heart button in the media controls, headset buttons, audio focus, and pausing when headphones come out.
+- **Downloads** for offline listening (songs, albums, playlists, Spices, or everything you like), stored in Media3's download cache, so playback finds them automatically.
+- **Home screen widget** with artwork, colour taken from the cover, and play/skip/back. It resumes your last queue even when the app isn't running.
+- **Haptics** throughout, using Android's own haptic constants.
+- **Sleep timer** (minutes, or "end of this song").
+- Resumes where you left off after the app is closed or the phone restarts.
 
-   ```bash
-   npm install
-   ```
+## Layout
 
-2. Start the app
+| Path | What's there |
+|---|---|
+| `src/app/` | Routes (Expo Router). `(auth)` is sign-in; `(app)` has three tabs, each with its own stack, sharing the detail screens in `(home,search,library)/`. |
+| `src/api/` | Types and calls for the Harmoni API (`docs/api/reference.md` on any server). |
+| `src/auth/` | Server discovery, dynamic client registration, OAuth + PKCE. |
+| `src/player/` | The queue, shuffle, autoplay, play/listen reporting and Link reporting. Native plays; this decides what. |
+| `src/link/` | Harmoni Link: the event stream, reports, commands, transfers. |
+| `src/now-playing/` | The full-screen player: backdrop, lyrics, queue, transport. |
+| `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, menus, collection screens, Spice art, and the design system. |
+| `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `Downloads`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
 
-   ```bash
-   npx expo start
-   ```
+Two things worth knowing about the design:
 
-In the output, you'll find options to open the app in a
+- **Tokens live natively.** `AuthStore` keeps the session encrypted with an Android Keystore key and refreshes it (one refresh at a time, saving the rotated refresh token first), so audio, downloads, the widget and JS all share one source of truth.
+- **JS timers stop in the background on Android**, so the native module ticks (every 0.5 s while playing) and everything periodic in JS (Link reports, reconnects, autoplay retries) runs off those ticks (`src/lib/heartbeat.ts`).
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Building
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+You need Node 22, JDK 17, the Android SDK (platform 36, build tools, NDK) and Bun.
 
 ```bash
-npm run reset-project
+bun install
+bunx expo prebuild --platform android
+cd android && ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+cd .. && bunx expo start --dev-client
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+For a release build: `cd android && ./gradlew :app:assembleRelease`. It needs a signing config before it can be installed on a phone.
 
-### Other setup steps
+## Developing against a real server
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- `bun scripts/dev-login.ts https://your.server cli emulator` signs in through your own browser (you type your password there, nothing else sees it) and saves tokens to `.dev/` (gitignored).
+- `bun scripts/dev-api.ts GET /api/me` calls the API with the `cli` session.
+- `sh scripts/dev-session.sh emulator` copies the `emulator` session into a debug build on a connected device, so you can skip the sign-in screen.
+- Start Metro with `EXPO_PUBLIC_DISABLE_LINK=1` to keep a test device out of Harmoni Link (so it never takes playback from your phone), and `EXPO_PUBLIC_NO_REPORTS=1` to stop it writing to your play history. Add `--clear` when you change these: Metro caches them.
 
-## Learn more
+## Credits
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Icons: Basil by Craftwork and Font Awesome 6, both CC BY 4.0 (the same set the web app uses). Font: Outfit.

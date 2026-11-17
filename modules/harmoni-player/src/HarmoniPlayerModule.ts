@@ -97,6 +97,7 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   setVolume(volume: number): Promise<void>;
   stop(): Promise<void>;
   retry(): Promise<void>;
+  pauseAtEndOfSong(on: boolean): Promise<void>;
 
   setLikedIds(json: string): void;
   setLiked(id: string, liked: boolean): void;
@@ -108,6 +109,10 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   getDownloadSize(): Promise<number>;
 
   getArtworkColors(url: string): Promise<ArtworkColors | null>;
+
+  canPinWidget(): boolean;
+  hasWidget(): boolean;
+  pinWidget(): Promise<boolean>;
 }
 
 export default requireNativeModule<HarmoniPlayerModule>("HarmoniPlayer");

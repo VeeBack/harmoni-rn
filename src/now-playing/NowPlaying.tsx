@@ -15,7 +15,8 @@ import { kv } from "@/lib/storage";
 import { useLink } from "@/link/link";
 import { useArtworkColors, usePlayback, usePlayingOn } from "@/player/hooks";
 import { closeNowPlaying, openNowPlaying, useNowPlaying, type NowPlayingView } from "@/shell/state";
-import { openSongMenu } from "@/song/menu";
+import { openSongMenu, type Extra } from "@/song/menu";
+import { setSleep, sleepLabel, useSleep } from "@/player/sleep";
 import { useIsLiked, useLibrary } from "@/state/library";
 import { useSession } from "@/state/session";
 import { Artwork } from "@/ui/Artwork";
@@ -249,6 +250,20 @@ function CompactHeader({ song }: { song: QueueSong }) {
   );
 }
 
+function sleepItem(): Extra {
+  const s = useSleep.getState();
+  return {
+    label: "Sleep timer",
+    icon: "timer",
+    detail: sleepLabel(s),
+    submenu: () => [
+      ...[15, 30, 45, 60, 90].map((m) => ({ label: `${m} minutes`, checked: false, onPress: () => (setSleep(m), toast(`Music stops in ${m} minutes`)) })),
+      { label: "End of this song", checked: s.endOfSong, onPress: () => (setSleep("song"), toast("Music stops after this song")) },
+      ...(s.until || s.endOfSong ? (["divider", { label: "Turn off", icon: "close" as const, onPress: () => (setSleep(null), toast("Sleep timer off")) }] as const) : []),
+    ],
+  };
+}
+
 function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: ReturnType<typeof Gesture.Pan> }) {
   const { width, height } = useWindowDimensions();
   const pb = usePlayback();
@@ -304,7 +319,7 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
             </Text>
           ) : null}
         </View>
-        <Press onPress={() => openSongMenu(song, [], { fromNowPlaying: true })} feedback="contextClick" scaleTo={0.85} accessibilityLabel={`More options for ${song.title}`} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+        <Press onPress={() => openSongMenu(song, [sleepItem()], { fromNowPlaying: true })} feedback="contextClick" scaleTo={0.85} accessibilityLabel={`More options for ${song.title}`} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
           <Icon name="more" size={22} color={W(0.85)} />
         </Press>
         <LikeButton song={song} />

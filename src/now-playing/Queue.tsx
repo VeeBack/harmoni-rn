@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
@@ -19,7 +19,7 @@ import { toast } from "@/ui/overlays";
 
 const ROW = 64;
 const W = (a: number) => `rgba(255,255,255,${a})`;
-const MAX = 200;
+const PAGE = 40;
 
 interface Item {
   key: string;
@@ -29,6 +29,7 @@ interface Item {
 
 export function QueueView() {
   const pb = usePlayback();
+  const [limit, setLimit] = useState(PAGE);
   const me = useSession((s) => s.me);
   const setMe = useSession((s) => s.setMe);
   const { yours, suggested } = useMemo(() => {
@@ -40,8 +41,9 @@ export function QueueView() {
       if (song.autoplay) s.push(item);
       else y.push(item);
     });
-    return { yours: y.slice(0, MAX), suggested: s.slice(0, MAX) };
+    return { yours: y, suggested: s };
   }, [pb.queue, pb.index]);
+  const yoursShown = yours.slice(0, limit);
 
   const autoplay = !!me?.autoplay;
   const serverAutoplay = me?.server.features.autoplay ?? true;
@@ -62,7 +64,14 @@ export function QueueView() {
       <Text size={18} weight={600} style={{ marginBottom: 12 }}>
         {yours.length ? "Up next" : "Nothing queued after this one."}
       </Text>
-      {yours.length ? <Reorderable items={yours} /> : null}
+      {yours.length ? <Reorderable items={yoursShown} /> : null}
+      {yours.length > limit ? (
+        <Press onPress={() => setLimit((l) => l + PAGE)} feedback="tap" scaleTo={0.97} style={{ alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 10 }}>
+          <Text size={13} weight={600} color={W(0.8)}>
+            Show more ({(yours.length - limit).toLocaleString()} left)
+          </Text>
+        </Press>
+      ) : null}
       {serverAutoplay ? (
         <View style={{ marginTop: 28, marginBottom: 12, paddingTop: yours.length ? 24 : 0, borderTopWidth: yours.length ? 1 : 0, borderColor: W(0.12), flexDirection: "row", alignItems: "center", gap: 16 }}>
           <View style={{ flex: 1 }}>
@@ -76,7 +85,7 @@ export function QueueView() {
           <Switch value={autoplay} onChange={toggleAutoplay} light />
         </View>
       ) : null}
-      {autoplay && suggested.length ? <Reorderable items={suggested} /> : null}
+      {autoplay && suggested.length ? <Reorderable items={suggested.slice(0, PAGE)} /> : null}
     </ScrollView>
   );
 }

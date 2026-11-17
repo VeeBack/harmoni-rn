@@ -21,7 +21,6 @@ import android.util.SizeF
 import android.view.KeyEvent
 import android.widget.RemoteViews
 import androidx.media3.common.Player
-import androidx.palette.graphics.Palette
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -139,9 +138,7 @@ class NowPlayingWidget : AppWidgetProvider() {
         ?: return null
       val size = minOf(raw.width, raw.height, 320)
       val square = Bitmap.createScaledBitmap(centerCrop(raw), size, size, true)
-      val palette = Palette.from(square).generate()
-      val swatch = palette.darkMutedSwatch ?: palette.mutedSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch
-      Art(round(square, size * 0.09f), darken(swatch?.rgb ?: Color.parseColor("#1b1b1b")))
+      Art(round(square, size * 0.09f), deep(weightedMean(square)))
     }.getOrNull()
 
     private fun centerCrop(b: Bitmap): Bitmap {
@@ -158,6 +155,26 @@ class NowPlayingWidget : AppWidgetProvider() {
       c.drawBitmap(b, 0f, 0f, p)
       return out
     }
+
+    /** The web app's artwork colour: a saturation-weighted mean of a 24×24 thumbnail. */
+    fun weightedMean(b: Bitmap): Int {
+      val small = Bitmap.createScaledBitmap(b, 24, 24, true)
+      var rs = 0.0; var gs = 0.0; var bs = 0.0; var ws = 0.0
+      for (y in 0 until 24) for (x in 0 until 24) {
+        val c = small.getPixel(x, y)
+        val r = (c shr 16) and 0xff; val g = (c shr 8) and 0xff; val bl = c and 0xff
+        val max = maxOf(r, g, bl); val min = minOf(r, g, bl)
+        val sat = if (max == 0) 0.0 else (max - min).toDouble() / max
+        val w = 0.15 + sat * sat
+        rs += r * w; gs += g * w; bs += bl * w; ws += w
+      }
+      return Color.rgb((rs / ws).toInt(), (gs / ws).toInt(), (bs / ws).toInt())
+    }
+
+    /** The web's "deep" colour (c × 0.38 + 14), for big backgrounds behind light text. */
+    private fun deep(c: Int): Int = Color.rgb(
+      (Color.red(c) * 0.38 + 14).toInt(), (Color.green(c) * 0.38 + 14).toInt(), (Color.blue(c) * 0.38 + 14).toInt(),
+    )
 
     /** Keeps the tint dark enough for the cream text on it. */
     private fun darken(color: Int): Int {
