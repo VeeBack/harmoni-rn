@@ -6,9 +6,10 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 
 - **Background playback** with a Media3 `MediaSessionService`: notification, lock screen and Bluetooth controls, a heart button in the media controls, headset buttons, audio focus, and pausing when headphones come out.
 - **Downloads** for offline listening (songs, albums, playlists, Spices, or everything you like), stored in Media3's download cache, so playback finds them automatically.
+- **Android Auto**: browse Recently Played, Liked Songs, Playlists and Downloads, and search by voice.
 - **Home screen widget** with artwork, colour taken from the cover, and play/skip/back. It resumes your last queue even when the app isn't running.
 - **Haptics** throughout, using Android's own haptic constants.
-- **Sleep timer** (minutes, or "end of this song").
+- **Sleep timer** (minutes, or "end of this song"), **crossfade** (0–12 s, equal-power like the web), smooth play/pause, and the phone's **equalizer**.
 - Resumes where you left off after the app is closed or the phone restarts.
 
 ## Layout

@@ -7,6 +7,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -48,6 +52,78 @@ class PlaybackService : MediaLibraryService() {
 
     /** Errors the JS side should hear about: message, song id. */
     @Volatile var onError: ((String, String?) -> Unit)? = null
+
+    /** Crossfade length (0 = off), set from Settings. */
+    @Volatile var crossfadeMs = 0L
+  }
+
+  // --- crossfade (the web's mixer.ts): a second player fades the ending song out with cos,
+  // the main player fades the next one in with sin, both on an equal-power curve.
+  private var fader: ExoPlayer? = null
+  private var fadeStart = 0L
+  private var fadeOutMs = 0L
+  private var fadeBase = 1f
+  private var crossfadedKey: String? = null
+  private var ownSkip = false
+  /** True while the transition we caused is the one being reported (it counts as "ended"). */
+  @Volatile var crossfading = false
+    private set
+
+  private val crossfadeTick = object : Runnable {
+    override fun run() {
+      stepCrossfade()
+      main.postDelayed(this, if (fader != null) 30 else 250)
+    }
+  }
+
+  private fun stepCrossfade() {
+    val fading = fader
+    if (fading != null) {
+      val t = (SystemClock.elapsedRealtime() - fadeStart).toFloat()
+      val xo = (t / fadeOutMs.coerceAtLeast(1)).coerceIn(0f, 1f)
+      val xi = (t / crossfadeMs.coerceAtLeast(1)).coerceIn(0f, 1f)
+      fading.volume = fadeBase * cos(xo * PI.toFloat() / 2)
+      player.volume = fadeBase * sin(xi * PI.toFloat() / 2)
+      if (xo >= 1f && xi >= 1f) endCrossfade(false)
+      return
+    }
+    val cf = crossfadeMs
+    if (cf <= 0 || !player.isPlaying) return
+    val dur = player.duration
+    val pos = player.currentPosition
+    if (dur <= 0 || dur <= 3 * cf || dur - pos > cf) return
+    if (player.repeatMode == Player.REPEAT_MODE_ONE || !player.hasNextMediaItem()) return
+    val key = "${player.currentMediaItemIndex}:${player.currentMediaItem?.mediaId}"
+    if (key == crossfadedKey) return
+    crossfadedKey = key
+    val item = player.currentMediaItem ?: return
+    val out = ExoPlayer.Builder(this)
+      .setMediaSourceFactory(DefaultMediaSourceFactory(Core.playbackDataSource))
+      .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+      .build()
+    out.setMediaItem(Core.resolve(item), pos)
+    fadeBase = player.volume
+    out.volume = fadeBase
+    out.prepare()
+    out.play()
+    fader = out
+    fadeStart = SystemClock.elapsedRealtime()
+    fadeOutMs = dur - pos
+    player.volume = 0f
+    crossfading = true
+    ownSkip = true
+    player.seekToNextMediaItem()
+    ownSkip = false
+  }
+
+  /** Ends a crossfade; when cancelled (pause, skip, seek) the outgoing song stops and the main one is at full volume. */
+  fun endCrossfade(cancelled: Boolean) {
+    val out = fader ?: return
+    fader = null
+    out.release()
+    player.volume = fadeBase
+    crossfading = false
+    if (cancelled) crossfadedKey = null
   }
 
   lateinit var player: ExoPlayer
@@ -107,6 +183,7 @@ class PlaybackService : MediaLibraryService() {
 
     instance = this
     main.postDelayed(saver, 10_000)
+    main.post(crossfadeTick)
     // Lets equalizer apps (and the system one) attach to our audio.
     sendBroadcast(
       Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
@@ -129,6 +206,8 @@ class PlaybackService : MediaLibraryService() {
     instance = null
     main.removeCallbacks(saver)
     main.removeCallbacks(skipAfterError)
+    main.removeCallbacks(crossfadeTick)
+    endCrossfade(true)
     sendBroadcast(
       Intent(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
         .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
@@ -157,9 +236,20 @@ class PlaybackService : MediaLibraryService() {
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
       authRetries = 0
       main.removeCallbacks(skipAfterError)
+      // A skip the person made during a fade cancels it.
+      if (fader != null && !ownSkip) endCrossfade(true)
+      main.post { if (fader == null) crossfading = false }
       refreshButtons()
       QueueStore.save(this@PlaybackService, player)
       NowPlayingWidget.refresh(this@PlaybackService, player)
+    }
+
+    override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+      if (reason == Player.DISCONTINUITY_REASON_SEEK && fader != null && !ownSkip) endCrossfade(true)
+    }
+
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+      if (!playWhenReady && fader != null) endCrossfade(true)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {

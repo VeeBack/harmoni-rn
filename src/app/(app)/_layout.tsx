@@ -23,6 +23,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     Native.setSmooth(kv.get("settings.smoothPause", true));
+    Native.setCrossfade(kv.get("settings.crossfade", 0));
     restorePlayer();
     refreshMe();
     useLibrary.getState().load();

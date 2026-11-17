@@ -25,6 +25,7 @@ import { Icon, type IconName } from "@/ui/Icon";
 import { confirm, prompt, toast } from "@/ui/overlays";
 import { IconButton, Press } from "@/ui/Press";
 import { PageTitle, Screen } from "@/ui/Screen";
+import { Stepper } from "@/ui/Stepper";
 import { Text } from "@/ui/Text";
 import { colors, radius } from "@/ui/theme";
 
@@ -241,9 +242,34 @@ function useKvSwitch(key: string, fallback: boolean) {
 function PlaybackGroup() {
   const [keepAwake, setKeepAwake] = useKvSwitch("settings.keepAwake", false);
   const [smooth, setSmooth] = useKvSwitch("settings.smoothPause", true);
+  const [fade, setFade] = useState(kv.get("settings.crossfade", 0));
   return (
     <Group title="Playback" note="These are for this phone, so your phone and computer can each have their own.">
-      <Row first title="Smooth play and pause" note="Eases the music in and out instead of cutting it.">
+      <View style={{ padding: 16, gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1 }}>
+            <Text weight={500}>Crossfade</Text>
+            <Text size={13} color={colors.text2} style={{ marginTop: 2, lineHeight: 19 }}>
+              {fade ? `Each song fades into the next over ${fade} seconds.` : "Fade each song into the next, the way a DJ would."}
+            </Text>
+          </View>
+          <Text size={13} weight={500} color={colors.text2} tabular style={{ width: 44, textAlign: "right" }}>
+            {fade ? `${fade} s` : "Off"}
+          </Text>
+        </View>
+        <Stepper
+          label="Crossfade"
+          value={fade}
+          min={0}
+          max={12}
+          onChange={(v) => {
+            setFade(v);
+            kv.set("settings.crossfade", v);
+            Native.setCrossfade(v);
+          }}
+        />
+      </View>
+      <Row title="Smooth play and pause" note="Eases the music in and out instead of cutting it.">
         <Switch
           value={smooth}
           onChange={(v) => {

@@ -101,10 +101,13 @@ class HarmoniPlayerModule : Module() {
       val prev = track
       val newIndex = p.currentMediaItemIndex
       if (prev != null) {
-        val why = when (reason) {
+        val why = when {
+          PlaybackService.instance?.crossfading == true -> "ended"
+          else -> when (reason) {
           Player.MEDIA_ITEM_TRANSITION_REASON_AUTO, Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> "ended"
           Player.MEDIA_ITEM_TRANSITION_REASON_SEEK -> if (newIndex < prev.index && newIndex >= 0) "back" else "skip"
           else -> "skip"
+          }
         }
         finishTrack(prev, why, if (why == "ended") (prev.item.mediaMetadata.durationMs ?: prev.lastPos) else prev.lastPos)
       }
@@ -531,6 +534,7 @@ class HarmoniPlayerModule : Module() {
 
     AsyncFunction("pause") {
       withPlayer { p ->
+        PlaybackService.instance?.endCrossfade(true)
         if (smooth && p.isPlaying) {
           fadeTo(p, 0f, 180) {
             p.pause()
@@ -545,6 +549,11 @@ class HarmoniPlayerModule : Module() {
     }.runOnQueue(Queues.MAIN)
 
     Function("setSmooth") { on: Boolean -> smooth = on }
+
+    Function("setCrossfade") { seconds: Int ->
+      PlaybackService.crossfadeMs = seconds.coerceIn(0, 12) * 1000L
+      if (seconds <= 0) main.post { PlaybackService.instance?.endCrossfade(true) }
+    }
 
     AsyncFunction("seekTo") { ms: Double -> withPlayer { it.seekTo(ms.toLong().coerceAtLeast(0)) } }.runOnQueue(Queues.MAIN)
 
