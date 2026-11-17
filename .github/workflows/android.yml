@@ -76,17 +76,28 @@ jobs:
           echo "HARMONI_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "HARMONI_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
 
-      - name: More swap
-        # React Native's C++ builds are memory hungry; extra swap keeps the runner alive.
+      - name: Make room
+        # The runner's root disk is small and React Native's native build is big (and memory hungry).
         run: |
+          df -h / /mnt
           # systemd-oomd SIGTERMs (exit 143) builds under memory pressure; the job has the machine to itself.
           sudo systemctl stop systemd-oomd || true
+          # Toolchains this build never uses.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift /usr/local/julia* || true
+          # Keep only the NDK React Native builds with.
+          for d in /usr/local/lib/android/sdk/ndk/*; do
+            [ "$(basename "$d")" = "27.1.12297006" ] || sudo rm -rf "$d"
+          done
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          # Swap on the separate scratch disk, not the root one.
           sudo swapoff -a || true
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo fallocate -l 8G /mnt/harmoni.swap
+          sudo chmod 600 /mnt/harmoni.swap
+          sudo mkswap /mnt/harmoni.swap
+          sudo swapon /mnt/harmoni.swap
           free -h
+          df -h / /mnt
 
       - name: Build APK
         working-directory: android
