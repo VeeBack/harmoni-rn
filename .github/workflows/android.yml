@@ -76,12 +76,22 @@ jobs:
           echo "HARMONI_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
           echo "HARMONI_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
 
+      - name: More swap
+        # React Native's C++ builds are memory hungry; extra swap keeps the runner alive.
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 10G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Build APK
         working-directory: android
         run: |
           # The generated file has no trailing newline: start on a new line.
-          printf '\norg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g\n' >> gradle.properties
-          tail -3 gradle.properties
+          printf '\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g\nkotlin.daemon.jvmargs=-Xmx2g\norg.gradle.workers.max=3\n' >> gradle.properties
+          tail -4 gradle.properties
           # arm64 covers every phone from about 2017 on; run the workflow by hand to add armv7.
           ./gradlew :app:assembleRelease -PreactNativeArchitectures=${{ inputs.architectures || 'arm64-v8a' }} --no-daemon --build-cache
 
