@@ -71,6 +71,8 @@ type Events = {
   onRemoteLike: (e: { songId: string; liked: boolean }) => void;
   onDownload: (e: DownloadEvent) => void;
   onSignedOut: (e: Record<string, never>) => void;
+  onRemoteCommand: (e: { type: "toggle" | "next" | "prev" | "seek" | "jumpTo" | "repeat" | "shuffle" | "volume" | "mute"; positionMs?: number; index?: number; mode?: "off" | "all" | "one"; on?: boolean; volume?: number; muted?: boolean }) => void;
+  onSystemTransfer: (e: { to: string | null }) => void;
 };
 
 declare class HarmoniPlayerModule extends NativeModule<Events> {
@@ -101,6 +103,8 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   pauseAtEndOfSong(on: boolean): Promise<void>;
   setSmooth(on: boolean): void;
   setCrossfade(seconds: number): void;
+  setRemote(json: string | null): Promise<void>;
+  setLinkDevices(json: string, active: string | null, volume: number): void;
 
   setLikedIds(json: string): void;
   setLiked(id: string, liked: boolean): void;

@@ -6,6 +6,7 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 
 - **Background playback** with a Media3 `MediaSessionService`: notification, lock screen and Bluetooth controls, a heart button in the media controls, headset buttons, audio focus, and pausing when headphones come out.
 - **Downloads** for offline listening (songs, albums, playlists, Spices, or everything you like), stored in Media3's download cache, so playback finds them automatically.
+- **Harmoni Link in Android's media controls.** While another device plays, the notification, lock screen, widget and car show its song and control it, and the output chip shows that device's name instead of "This phone". Your Link devices also appear in Android's output switcher: pick one to move playback there, and the volume slider controls that device.
 - **Android Auto**: browse Recently Played, Liked Songs, Playlists and Downloads, and search by voice.
 - **Home screen widget** with artwork, colour taken from the cover, and play/skip/back. It resumes your last queue even when the app isn't running.
 - **Haptics** throughout, using Android's own haptic constants.

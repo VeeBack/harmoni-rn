@@ -8,6 +8,7 @@ import { View } from "react-native";
 import { link, useLinkPref } from "@/link/link";
 import { flushPendingListens, restorePlayer, setPlayerToast } from "@/player/player";
 import { Dock } from "@/shell/Dock";
+import "@/player/remoteSession";
 import { NowPlaying } from "@/now-playing/NowPlaying";
 import { useLibrary } from "@/state/library";
 import { useSession } from "@/state/session";

@@ -4,6 +4,7 @@ package com.ceccun.harmoni.player
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -364,7 +365,7 @@ class HarmoniPlayerModule : Module() {
 
     Events(
       "onState", "onTick", "onTransition", "onTimeline", "onListen", "onPlayed",
-      "onError", "onRemoteLike", "onDownload", "onSignedOut",
+      "onError", "onRemoteLike", "onDownload", "onSignedOut", "onRemoteCommand", "onSystemTransfer",
     )
 
     OnCreate {
@@ -378,6 +379,19 @@ class HarmoniPlayerModule : Module() {
       }
       PlaybackService.onError = { message, songId -> main.post { sendEvent("onError", mapOf("message" to message, "songId" to songId)) } }
       PlaybackService.playerListeners += onNewPlayer
+      PlaybackService.onRemoteCommand = { cmd -> main.post { sendEvent("onRemoteCommand", jsonToMap(cmd)) } }
+      if (Build.VERSION.SDK_INT >= 30) {
+        LinkRouteProvider.onTransfer = { to -> main.post { sendEvent("onSystemTransfer", mapOf("to" to to)) } }
+        LinkRouteProvider.onVolume = { v -> main.post { sendEvent("onRemoteCommand", mapOf("type" to "volume", "volume" to v / 100.0)) } }
+        // Ask Android to show Harmoni Link devices for this app in the output switcher.
+        runCatching {
+          android.media.MediaRouter2.getInstance(context).registerRouteCallback(
+            context.mainExecutor,
+            object : android.media.MediaRouter2.RouteCallback() {},
+            android.media.RouteDiscoveryPreference.Builder(listOf(LinkRouteProvider.FEATURE), true).build(),
+          )
+        }
+      }
       runCatching { publishShortcuts(context) }
       main.post {
         PlaybackService.instance?.let { withPlayer { } }
@@ -549,6 +563,29 @@ class HarmoniPlayerModule : Module() {
     }.runOnQueue(Queues.MAIN)
 
     Function("setSmooth") { on: Boolean -> smooth = on }
+
+    /** Another device is playing (JSON) or not (null): what the media session shows. */
+    AsyncFunction("setRemote") { json: String? ->
+      if (json == null) {
+        PlaybackService.instance?.showLocal()
+      } else {
+        val o = JSONObject(json)
+        val svc = PlaybackService.instance
+        if (svc != null) svc.showRemote(o) else withPlayer { PlaybackService.instance?.showRemote(o) }
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    /** This account's other online devices and which one is playing (for the output switcher). */
+    Function("setLinkDevices") { json: String, active: String?, volume: Double ->
+      if (Build.VERSION.SDK_INT >= 30) {
+        val a = JSONArray(json)
+        val list = (0 until a.length()).map { i ->
+          val d = a.getJSONObject(i)
+          LinkRouteProvider.Device(d.getString("id"), d.optString("name", "Device"), d.optString("kind", "phone"))
+        }
+        LinkRouteProvider.update(list, active, (volume * 100).toInt().coerceIn(0, 100))
+      }
+    }
 
     Function("setCrossfade") { seconds: Int ->
       PlaybackService.crossfadeMs = seconds.coerceIn(0, 12) * 1000L

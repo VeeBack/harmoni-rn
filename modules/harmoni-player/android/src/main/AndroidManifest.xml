@@ -40,6 +40,15 @@
       </intent-filter>
     </service>
 
+    <service
+        android:name="com.ceccun.harmoni.player.LinkRouteProvider"
+        android:exported="true"
+        android:label="Harmoni Link">
+      <intent-filter>
+        <action android:name="android.media.MediaRoute2ProviderService" />
+      </intent-filter>
+    </service>
+
     <receiver
         android:name="androidx.media3.session.MediaButtonReceiver"
         android:exported="true">

@@ -4,6 +4,7 @@ package com.ceccun.harmoni.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -52,6 +53,9 @@ class PlaybackService : MediaLibraryService() {
 
     /** Errors the JS side should hear about: message, song id. */
     @Volatile var onError: ((String, String?) -> Unit)? = null
+
+    /** Controls pressed on the remote player (notification, lock screen, widget): Link commands for JS. */
+    @Volatile var onRemoteCommand: ((JSONObject) -> Unit)? = null
 
     /** Crossfade length (0 = off), set from Settings. */
     @Volatile var crossfadeMs = 0L
@@ -128,6 +132,48 @@ class PlaybackService : MediaLibraryService() {
 
   lateinit var player: ExoPlayer
     private set
+  private var remotePlayer: RemotePlayer? = null
+
+  /** Another device is playing: the session shows (and controls) that instead of this phone. */
+  fun showRemote(json: JSONObject) {
+    val s = session ?: return
+    val r = remotePlayer ?: RemotePlayer(mainLooper) { cmd -> onRemoteCommand?.invoke(cmd) }.also { remotePlayer = it }
+    r.update(json)
+    // Point at the routing session only once it exists: Android looks for it when the
+    // routing id changes, and shows "Other device" if it isn't there yet.
+    if (Build.VERSION.SDK_INT >= 30) linkRoutingChanged()
+    if (s.player !== r) {
+      endCrossfade(true)
+      if (player.isPlaying) player.pause()
+      s.player = r
+    }
+    refreshButtons()
+    NowPlayingWidget.refresh(this, r)
+  }
+
+  fun linkRoutingChanged() {
+    val r = remotePlayer ?: return
+    if (Build.VERSION.SDK_INT < 30) return
+    val id = r.remote?.deviceId
+    val ready = id != null && LinkRouteProvider.sessionFor == id
+    val want = if (ready) LinkRouteProvider.uniqueSessionId(this, id!!) else null
+    if (r.routingId == want) return
+    if (want == null) r.routingId = null
+    // Give SystemUI's router a moment to see the new session before pointing at it.
+    else main.postDelayed({ if (LinkRouteProvider.sessionFor == id) remotePlayer?.routingId = want }, 400)
+  }
+
+  /** This phone again (or nothing playing anywhere). */
+  fun showLocal() {
+    val s = session ?: return
+    if (s.player !== player) s.player = player
+    remotePlayer = null
+    refreshButtons()
+    NowPlayingWidget.refresh(this, player)
+  }
+
+  /** The player the session (notification, widget, car) is showing right now. */
+  val shownPlayer: Player get() = session?.player ?: player
   private var session: MediaLibrarySession? = null
   private val background by lazy { MoreExecutors.listeningDecorator(Core.io) }
   private val main = Handler(Looper.getMainLooper())
@@ -182,6 +228,7 @@ class PlaybackService : MediaLibraryService() {
     setMediaNotificationProvider(provider)
 
     instance = this
+    if (Build.VERSION.SDK_INT >= 30) LinkRouteProvider.onSessionReady = { main.post { linkRoutingChanged() } }
     main.postDelayed(saver, 10_000)
     main.post(crossfadeTick)
     // Lets equalizer apps (and the system one) attach to our audio.
@@ -223,7 +270,7 @@ class PlaybackService : MediaLibraryService() {
   /** The heart in the notification and on the lock screen. */
   fun refreshButtons() {
     val s = session ?: return
-    val id = player.currentMediaItem?.mediaId
+    val id = shownPlayer.currentMediaItem?.mediaId
     val liked = id != null && Core.liked.contains(id)
     val heart = CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
       .setDisplayName(if (liked) "Unlike" else "Like")
@@ -314,7 +361,7 @@ class PlaybackService : MediaLibraryService() {
       args: Bundle,
     ): ListenableFuture<SessionResult> {
       if (customCommand.customAction == ACTION_LIKE) {
-        player.currentMediaItem?.mediaId?.let { Core.toggleLikeRemotely(it) }
+        shownPlayer.currentMediaItem?.mediaId?.let { Core.toggleLikeRemotely(it) }
         refreshButtons()
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
       }
