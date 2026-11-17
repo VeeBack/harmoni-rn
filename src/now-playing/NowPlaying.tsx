@@ -24,6 +24,7 @@ import { toast, useToastOffset } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { layout } from "@/ui/theme";
+import { FadeMask } from "@/ui/FadeMask";
 import { Backdrop } from "./Backdrop";
 import { openLinkPicker } from "./LinkPicker";
 import { PlainLyrics, SyncedLyrics } from "./Lyrics";
@@ -132,13 +133,23 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
         <View style={{ flex: 1 }}>
           <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8 }}>
             {shown === "queue" ? (
-              <QueueView />
+              <FadeMask stops={[[0, 0], [0.03, 1], [0.86, 1], [1, 0]]}>
+                <QueueView />
+              </FadeMask>
             ) : lyricsQ.isError ? (
               <Text size={13} color={W(0.55)}>
                 Couldn't load lyrics right now.
               </Text>
             ) : lyrics && hasWords ? (
-              lyrics.sync === "line" || lyrics.sync === "word" ? <SyncedLyrics key={song.id} lyrics={lyrics} durationMs={song.durationMs} /> : <PlainLyrics lyrics={lyrics} />
+              lyrics.sync === "line" || lyrics.sync === "word" ? (
+                <FadeMask stops={[[0, 0], [0.14, 0], [0.34, 1], [0.78, 1], [1, 0]]}>
+                  <SyncedLyrics key={song.id} lyrics={lyrics} durationMs={song.durationMs} />
+                </FadeMask>
+              ) : (
+                <FadeMask stops={[[0, 0], [0.12, 1], [0.8, 1], [1, 0]]}>
+                  <PlainLyrics lyrics={lyrics} />
+                </FadeMask>
+              )
             ) : null}
             {shown === "lyrics" && hasWords ? <KeepAwakeForLyrics /> : null}
           </View>

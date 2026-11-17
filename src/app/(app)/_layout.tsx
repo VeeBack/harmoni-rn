@@ -2,7 +2,7 @@ import { Tabs } from "expo-router/js-tabs";
 import { useEffect } from "react";
 import { View } from "react-native";
 
-import { link } from "@/link/link";
+import { link, useLinkPref } from "@/link/link";
 import { flushPendingListens, restorePlayer, setPlayerToast } from "@/player/player";
 import { Dock } from "@/shell/Dock";
 import { NowPlaying } from "@/now-playing/NowPlaying";
@@ -26,7 +26,8 @@ export default function AppLayout() {
     flushPendingListens();
   }, [refreshMe]);
 
-  const linkOn = me?.server.features.link ?? false;
+  const linkOnHere = useLinkPref((p) => p.on);
+  const linkOn = (me?.server.features.link ?? false) && linkOnHere && process.env.EXPO_PUBLIC_DISABLE_LINK !== "1";
   useEffect(() => {
     link.setEnabled(linkOn);
   }, [linkOn]);

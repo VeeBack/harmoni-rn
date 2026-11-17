@@ -39,10 +39,14 @@ export const SpiceArt = memo(function SpiceArt({ name, covers = [], label = true
         <Rect width="100%" height="100%" fill={`url(#${id}b)`} />
       </Svg>
       {w > 0 && covers[0] ? (
-        <Image source={{ uri: covers[0] }} blurRadius={Math.max(8, w * 0.1)} style={{ position: "absolute", left: -0.3 * w, top: -0.1 * w, width: 1.4 * w, height: 1.2 * w, opacity: 0.8 }} contentFit="cover" />
+        <View style={{ position: "absolute", left: -0.3 * w, top: -0.3 * w, width: 1.4 * w, height: 1.2 * w, opacity: 0.85, filter: [{ blur: w * 0.14 }, { saturate: 1.7 }] } as object}>
+          <Image source={{ uri: covers[0] }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
+        </View>
       ) : null}
       {w > 0 && covers[1] ? (
-        <Image source={{ uri: covers[1] }} blurRadius={Math.max(8, w * 0.1)} style={{ position: "absolute", left: 0.25 * w, top: 0.3 * w, width: 1.05 * w, height: 1.0 * w, opacity: 0.55 }} contentFit="cover" />
+        <View style={{ position: "absolute", left: 0.25 * w, top: 0.3 * w, width: 1.05 * w, height: 1.0 * w, opacity: 0.6, filter: [{ blur: w * 0.14 }, { saturate: 1.7 }] } as object}>
+          <Image source={{ uri: covers[1] }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
+        </View>
       ) : null}
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>

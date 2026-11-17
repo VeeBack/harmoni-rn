@@ -86,6 +86,17 @@ export function SyncedLyrics({ lyrics, durationMs }: { lyrics: LyricsData; durat
 
   const viewport = useSharedValue(0);
   const offsets = useSharedValue<number[]>([]);
+  // Lines report their positions here; published to the UI thread once per frame.
+  const measured = useRef<number[]>([]);
+  const pending = useRef(0);
+  const measure = useRef((index: number, y: number) => {
+    measured.current[index] = y;
+    if (pending.current) return;
+    pending.current = requestAnimationFrame(() => {
+      pending.current = 0;
+      offsets.value = measured.current.slice();
+    });
+  }).current;
   const manual = useSharedValue(0);
   const scrolling = useSharedValue(false);
   const lastManual = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,7 +139,8 @@ export function SyncedLyrics({ lyrics, durationMs }: { lyrics: LyricsData; durat
   return (
     <GestureDetector gesture={pan}>
       <View style={{ flex: 1, overflow: "hidden" }} onLayout={(e) => (viewport.value = e.nativeEvent.layout.height)}>
-        <View style={{ paddingBottom: 600 }}>
+        {/* Taller than the panel on purpose: kept out of flex layout so lines never shrink. */}
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingBottom: 600 }}>
           {timeline.map((entry, i) => (
             <Line
               key={i}
@@ -140,7 +152,7 @@ export function SyncedLyrics({ lyrics, durationMs }: { lyrics: LyricsData; durat
               shift={shift}
               scrolling={scrolling}
               t={t}
-              offsets={offsets}
+              measure={measure}
             />
           ))}
         </View>
@@ -158,7 +170,7 @@ const Line = memo(function Line({
   shift,
   scrolling,
   t,
-  offsets,
+  measure,
 }: {
   entry: TimelineEntry;
   index: number;
@@ -168,7 +180,7 @@ const Line = memo(function Line({
   shift: SharedValue<number>;
   scrolling: SharedValue<boolean>;
   t: SharedValue<number>;
-  offsets: SharedValue<number[]>;
+  measure: (index: number, y: number) => void;
 }) {
   const ty = useSharedValue(0);
   useAnimatedReaction(
@@ -197,15 +209,12 @@ const Line = memo(function Line({
   });
 
   return (
-    <Animated.View
-      style={[{ transformOrigin: "left center" }, style]}
-      onLayout={(e) => {
-        const y = e.nativeEvent.layout.y;
-        const next = offsets.value.slice();
-        next[index] = y;
-        offsets.value = next;
-      }}
+    <View
+      collapsable={false}
+      style={{ flexShrink: 0 }}
+      onLayout={(e) => measure(index, e.nativeEvent.layout.y)}
     >
+    <Animated.View style={[{ transformOrigin: "left center" }, style]}>
       {entry.kind === "gap" ? (
         <Gap entry={entry} size={size} active={isActive} t={t} />
       ) : (
@@ -236,6 +245,7 @@ const Line = memo(function Line({
         </View>
       )}
     </Animated.View>
+    </View>
   );
 });
 

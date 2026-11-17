@@ -50,6 +50,13 @@ class PlaybackService : MediaSessionService() {
   private var session: MediaSession? = null
   private val main = Handler(Looper.getMainLooper())
   private var authRetries = 0
+  // Saves the playhead every 10 s while playing, so a killed app resumes close to where it was.
+  private val saver = object : Runnable {
+    override fun run() {
+      if (::player.isInitialized && player.isPlaying) QueueStore.save(this@PlaybackService, player)
+      main.postDelayed(this, 10_000)
+    }
+  }
   private val likeCommand = SessionCommand(ACTION_LIKE, Bundle.EMPTY)
 
   override fun onCreate() {
@@ -86,6 +93,7 @@ class PlaybackService : MediaSessionService() {
     setMediaNotificationProvider(provider)
 
     instance = this
+    main.postDelayed(saver, 10_000)
     playerListeners.toList().forEach { it(player) }
     refreshButtons()
   }
@@ -99,6 +107,7 @@ class PlaybackService : MediaSessionService() {
   override fun onDestroy() {
     if (::player.isInitialized && player.mediaItemCount > 0) QueueStore.save(this, player)
     instance = null
+    main.removeCallbacks(saver)
     session?.release()
     session = null
     player.release()

@@ -5,6 +5,7 @@ import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { importDevSession } from "@/auth/devSession";
 import "@/player/player";
 import { restoreQueryCache, queryClient } from "@/state/query";
 import { useSession } from "@/state/session";
@@ -24,6 +25,7 @@ export default function RootLayout() {
   const signedIn = useSession((s) => s.signedIn);
   useEffect(() => {
     const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 60);
+    importDevSession().then((ok) => ok && useSession.getState().didSignIn());
     return () => clearTimeout(t);
   }, []);
   return (

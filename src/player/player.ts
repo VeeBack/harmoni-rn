@@ -534,12 +534,17 @@ Native.addListener("onError", ({ message }) => {
   scheduleReport();
 });
 
+// Debug runs against a real account can opt out of writing history.
+const NO_REPORTS = process.env.EXPO_PUBLIC_NO_REPORTS === "1";
+if (NO_REPORTS) console.log("[harmoni] not reporting plays or listens (EXPO_PUBLIC_NO_REPORTS)");
+
 Native.addListener("onPlayed", ({ songId }) => {
+  if (NO_REPORTS) return;
   Api.recordPlay(songId).catch(() => {});
 });
 
 Native.addListener("onListen", (e) => {
-  if (!useSession.getState().me?.superProcessing || e.playedMs < 2000) return;
+  if (NO_REPORTS || !useSession.getState().me?.superProcessing || e.playedMs < 2000) return;
   let auto = false;
   try {
     auto = !!(e.song && JSON.parse(e.song).autoplay);

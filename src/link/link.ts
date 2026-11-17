@@ -33,6 +33,13 @@ export function setDeviceName(name: string) {
   link.reconnect();
 }
 
+/** Whether this device joins Harmoni Link (Settings). */
+export const useLinkPref = create<{ on: boolean }>(() => ({ on: kv.get("link.on", true) }));
+export function setLinkPref(on: boolean) {
+  kv.set("link.on", on);
+  useLinkPref.setState({ on });
+}
+
 interface LinkStore {
   enabled: boolean;
   connected: boolean;

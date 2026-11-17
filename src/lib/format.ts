@@ -29,7 +29,7 @@ export function total(songs: Pick<Song, "durationMs">[]): string {
   return `${Math.floor(min / 60)} hr ${min % 60} min`;
 }
 
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 export function joinNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? "";
