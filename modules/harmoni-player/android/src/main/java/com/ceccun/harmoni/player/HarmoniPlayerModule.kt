@@ -313,6 +313,27 @@ class HarmoniPlayerModule : Module() {
     }
   }
 
+  /** Long-press the launcher icon: Search, Liked Songs, Downloads. */
+  private fun publishShortcuts(ctx: Context) {
+    fun shortcut(id: String, label: String, path: String, icon: Int) =
+      androidx.core.content.pm.ShortcutInfoCompat.Builder(ctx, id)
+        .setShortLabel(label)
+        .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(ctx, icon))
+        .setIntent(
+          android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("com.ceccun.harmoni://$path"))
+            .setPackage(ctx.packageName)
+        )
+        .build()
+    androidx.core.content.pm.ShortcutManagerCompat.setDynamicShortcuts(
+      ctx,
+      listOf(
+        shortcut("search", "Search", "search", R.drawable.harmoni_sc_search),
+        shortcut("liked", "Liked Songs", "liked", R.drawable.harmoni_sc_liked),
+        shortcut("downloads", "Downloads", "downloads", R.drawable.harmoni_sc_downloads),
+      ),
+    )
+  }
+
   override fun definition() = ModuleDefinition {
     Name("HarmoniPlayer")
 
@@ -332,6 +353,7 @@ class HarmoniPlayerModule : Module() {
       }
       PlaybackService.onError = { message, songId -> main.post { sendEvent("onError", mapOf("message" to message, "songId" to songId)) } }
       PlaybackService.playerListeners += onNewPlayer
+      runCatching { publishShortcuts(context) }
       main.post {
         PlaybackService.instance?.let { withPlayer { } }
         runCatching { Downloads.manager.addListener(downloadListener) }

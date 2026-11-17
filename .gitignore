@@ -49,3 +49,7 @@ example
 modules/*/android/build/
 modules/*/android/.gradle/
 .kotlin/
+
+# builds
+*.apk
+*.aab

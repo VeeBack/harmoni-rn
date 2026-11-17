@@ -23,6 +23,7 @@
   "exclude": [
     "scripts",
     "node_modules",
-    "android"
+    "android",
+    "src/**/*.test.ts"
   ]
 }

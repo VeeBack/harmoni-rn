@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BackHandler, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, FadeIn, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -111,9 +111,32 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
   const hasWords = !!lyrics?.found && !lyrics.instrumental && !!lyrics.lines?.length;
   const shown: NowPlayingView = view === "lyrics" ? (lyricsQ.isLoading || hasWords ? "lyrics" : "art") : view;
   const linkConnected = useLink((l) => l.enabled && l.connected);
+  const playing = usePlayback().playing;
+
+  // Idle: in the lyrics view, 3 s without a touch while playing fades the chrome away.
+  const [idle, setIdle] = useState(false);
+  const chrome = useSharedValue(1);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wake = () => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    if (idle) setIdle(false);
+    idleTimer.current = setTimeout(() => setIdle(true), 3000);
+  };
+  useEffect(() => {
+    wake();
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
+  const isIdle = idle && shown === "lyrics" && playing;
+  useEffect(() => {
+    chrome.value = withTiming(isIdle ? 0 : 1, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.2, 1) });
+  }, [isIdle, chrome]);
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.value }));
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, overflow: "hidden" }}>
+    <View onTouchStart={wake} style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, overflow: "hidden" }}>
       <Backdrop art={song.artworkUrl} theme={theme} />
       <GestureDetector gesture={pan}>
         <View>
@@ -157,17 +180,19 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
           <GestureDetector gesture={pan}>
             <View style={{ paddingHorizontal: 28, paddingBottom: 8 }}>
               <Progress sheetPan={pan} />
-              <Controls />
+              <Animated.View style={chromeStyle} pointerEvents={isIdle ? "none" : "auto"}>
+                <Controls />
+              </Animated.View>
             </View>
           </GestureDetector>
         </View>
       )}
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 34, paddingTop: 4, paddingBottom: 10 }}>
+      <Animated.View style={[{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 34, paddingTop: 4, paddingBottom: 10 }, chromeStyle]} pointerEvents={isIdle ? "none" : "auto"}>
         <ViewButton icon="lyrics" label="Lyrics" on={shown === "lyrics"} onPress={() => openNowPlaying(view === "lyrics" ? "art" : "lyrics")} disabled={!lyricsOn} />
         {linkConnected ? <LinkButton /> : null}
         <ViewButton icon="queue" label="Up next" on={shown === "queue"} onPress={() => openNowPlaying(view === "queue" ? "art" : "queue")} />
-      </View>
+      </Animated.View>
     </View>
   );
 }

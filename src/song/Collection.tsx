@@ -484,7 +484,7 @@ function Actions({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: 4,
         paddingHorizontal: 16,
         marginTop: 12,
         marginBottom: 20,
@@ -500,7 +500,9 @@ function Actions({
               isCurrent ? player.toggle() : player.play(songs, 0)
             }
           />
+          <View style={{ width: 4 }} />
           <IconButton
+            size={40}
             label="Shuffle play"
             onPress={() =>
               player.play(songs, Math.floor(Math.random() * songs.length), {
@@ -512,6 +514,7 @@ function Actions({
           </IconButton>
           {!hideDownload ? (
             <IconButton
+              size={40}
               label={
                 dl.state === "all"
                   ? "Downloaded"
@@ -536,6 +539,7 @@ function Actions({
       ) : null}
       {menu ? (
         <IconButton
+          size={40}
           label={menuLabel ?? "More"}
           onPress={() => openMenu({ items: menu, label: menuLabel })}
           feedback="contextClick"
@@ -545,7 +549,7 @@ function Actions({
       ) : null}
       {has ? <View style={{ flex: 1 }} /> : null}
       {findable ? (
-        <IconButton label="Find" onPress={onFind}>
+        <IconButton size={40} label="Find" onPress={onFind}>
           <Icon name="search" size={20} color={colors.text2} />
         </IconButton>
       ) : null}
@@ -557,12 +561,13 @@ function Actions({
           accessibilityLabel={`Sort by ${sortLabel}`}
           style={{
             height: 34,
-            paddingHorizontal: 14,
+            paddingHorizontal: 12,
             borderRadius: 999,
             backgroundColor: colors.surface3,
             flexDirection: "row",
             alignItems: "center",
             gap: 6,
+            marginLeft: 2,
           }}
         >
           <Icon name={sort.descending ? "arrow-down" : "arrow-up"} size={15} />

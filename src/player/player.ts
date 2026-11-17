@@ -53,6 +53,9 @@ const get = usePlayer.getState;
 
 /** Is the native player holding our queue? (false after a restore or adopting Link state, until play) */
 let nativeLoaded = false;
+/** Native events from before a queue change we just made can still be in flight; ignore their index briefly. */
+let ignoreIndexUntil = 0;
+const settle = () => (ignoreIndexUntil = Date.now() + 400);
 let pendingPosition = 0;
 
 function persistExtra() {
@@ -76,6 +79,7 @@ function loadNative(play: boolean, positionMs = 0) {
   const s = get();
   if (s.index < 0 || !s.queue.length) return;
   nativeLoaded = true;
+  settle();
   Native.setQueue(json(s.queue), s.index, positionMs, play);
   Native.setRepeat(s.repeat);
   Native.setVolume(s.muted ? 0 : s.volume);
@@ -162,6 +166,7 @@ const local = {
     const s = get();
     if (i < 0 || i >= s.queue.length) return;
     set({ index: i, error: null, buffering: true, positionMs: 0, positionAt: Date.now() });
+    settle();
     if (!nativeLoaded) loadNative(true, 0);
     else {
       Native.skipTo(i, 0);
@@ -484,7 +489,7 @@ function applyNative(n: NativePlayerState) {
     positionAt: Date.now(),
     durationMs: n.durationMs ?? s.queue[n.index]?.durationMs ?? null,
   };
-  if (n.index >= 0 && n.index !== s.index && n.index < s.queue.length) patch.index = n.index;
+  if (n.index >= 0 && n.index !== s.index && n.index < s.queue.length && Date.now() > ignoreIndexUntil) patch.index = n.index;
   if (n.repeat && n.repeat !== s.repeat) patch.repeat = n.repeat;
   set(patch);
   if (n.ended && !isRemote()) onQueueEnded();
@@ -501,7 +506,7 @@ Native.addListener("onTransition", ({ index }) => {
   if (!nativeLoaded) return;
   const s = get();
   if (index >= 0 && index < s.queue.length) {
-    set({ index, error: null, positionMs: 0, positionAt: Date.now() });
+    if (Date.now() > ignoreIndexUntil || index === s.index) set({ index, error: null, positionMs: 0, positionAt: Date.now() });
     autoplayTries = 0;
     checkAutoplay();
     scheduleReport();
