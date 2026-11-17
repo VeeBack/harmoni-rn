@@ -89,6 +89,8 @@ class HarmoniPlayerModule : Module() {
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+      // After an error the same song can resume (retry, refreshed token) with no transition: track it again.
+      if (isPlaying && track == null) attachedTo?.let { startTrack(it) }
       val t = track ?: return
       if (isPlaying) t.lastWall = SystemClock.elapsedRealtime() else accumulate(t)
       scheduleTick()
@@ -317,7 +319,7 @@ class HarmoniPlayerModule : Module() {
       attach(p)
       val run = pending.toList()
       pending.clear()
-      run.forEach { it(p) }
+      run.forEach { runCatching { it(p) } }
     }, MoreExecutors.directExecutor())
   }
 
@@ -384,9 +386,13 @@ class HarmoniPlayerModule : Module() {
     OnDestroy {
       PlaybackService.playerListeners -= onNewPlayer
       main.removeCallbacks(tick)
-      attachedTo?.removeListener(playerListener)
-      runCatching { Downloads.manager.removeListener(downloadListener) }
-      controllerFuture?.let { MediaController.releaseFuture(it) }
+      val p = attachedTo
+      val f = controllerFuture
+      main.post {
+        p?.removeListener(playerListener)
+        runCatching { Downloads.manager.removeListener(downloadListener) }
+        f?.let { MediaController.releaseFuture(it) }
+      }
     }
 
     OnActivityEntersForeground {
@@ -492,6 +498,14 @@ class HarmoniPlayerModule : Module() {
 
     AsyncFunction("removeAt") { index: Int ->
       withPlayer { p -> if (index in 0 until p.mediaItemCount) p.removeMediaItem(index) }
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("removeRange") { from: Int, to: Int ->
+      withPlayer { p ->
+        val a = from.coerceIn(0, p.mediaItemCount)
+        val b = to.coerceIn(a, p.mediaItemCount)
+        if (b > a) p.removeMediaItems(a, b)
+      }
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("move") { from: Int, to: Int ->

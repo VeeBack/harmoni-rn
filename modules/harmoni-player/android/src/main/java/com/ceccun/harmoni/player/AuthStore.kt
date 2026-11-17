@@ -118,8 +118,11 @@ object AuthStore {
           refreshToken = t.optString("refresh_token", s.refreshToken),
           expiresAt = System.currentTimeMillis() + t.optLong("expires_in", 3600) * 1000,
         )
-        write(context, next) // the rotated refresh token is saved before anything else
-        session = next
+        try {
+          write(context, next) // the rotated refresh token is saved before anything else
+        } finally {
+          session = next // and kept in memory even if saving failed, rather than lost
+        }
         return next.accessToken
       }
       val error = runCatching { JSONObject(text).optString("error") }.getOrNull()
@@ -139,8 +142,8 @@ object AuthStore {
 
   /** Revokes the sign-in (best effort) and forgets it. Blocking. */
   fun revoke(context: Context) {
-    val s = get(context)
-    clear(context)
+    get(context)
+    val s = synchronized(lock) { session.also { clear(context) } }
     if (s == null || s.revocationEndpoint.isEmpty()) return
     runCatching { post(s.revocationEndpoint, form("token" to s.refreshToken, "client_id" to s.clientId)) }
   }

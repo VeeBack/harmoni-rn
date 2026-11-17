@@ -35,6 +35,7 @@ export const fonts = {
   500: "Outfit_500Medium",
   600: "Outfit_600SemiBold",
   700: "Outfit_700Bold",
+  800: "Outfit_800ExtraBold",
 } as const;
 
 export type Weight = keyof typeof fonts;

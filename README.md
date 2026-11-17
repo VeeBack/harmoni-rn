@@ -43,6 +43,14 @@ cd .. && bunx expo start --dev-client
 
 For a release build: `cd android && ./gradlew :app:assembleRelease`. It needs a signing config before it can be installed on a phone.
 
+## CI: an APK on every push
+
+`.github/workflows/android.yml` typechecks, runs the tests, and builds a release APK (arm64 + armv7) on every push to `main` and on pull requests. Download it from the run's **Artifacts** on the Actions tab. Pushing a tag like `v1.2.0` also attaches the APK to a GitHub Release.
+
+- Each build's `versionCode` is the run number, so a newer APK installs over an older one.
+- **Signing.** Without secrets, APKs are signed with the shared debug key: fine for testing, not for handing out. To sign with your own key, create one once (`keytool -genkeypair -v -keystore harmoni.jks -alias harmoni -keyalg RSA -keysize 4096 -validity 10000`) and add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -i harmoni.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Switching keys means uninstalling the debug-signed app once. Keep the keystore safe: losing it means people can't update.
+- Locally, the same `HARMONI_KEYSTORE_FILE`, `HARMONI_KEYSTORE_PASSWORD`, `HARMONI_KEY_ALIAS` and `HARMONI_KEY_PASSWORD` environment variables sign `assembleRelease` (see `plugins/withReleaseSigning.js`).
+
 ## Developing against a real server
 
 - `bun scripts/dev-login.ts https://your.server cli emulator` signs in through your own browser (you type your password there, nothing else sees it) and saves tokens to `.dev/` (gitignored).

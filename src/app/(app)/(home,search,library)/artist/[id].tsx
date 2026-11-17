@@ -89,7 +89,7 @@ function Hero({ a }: { a: Artist }) {
           <Text size={13} weight={500} color="rgba(255,255,255,0.8)">
             Artist
           </Text>
-          <Text size={48} weight={700} style={{ letterSpacing: -1.9, lineHeight: 48, textShadowColor: "rgba(0,0,0,0.25)", textShadowRadius: 30 }}>
+          <Text size={48} weight={800} style={{ letterSpacing: -1.9, lineHeight: 48, textShadowColor: "rgba(0,0,0,0.25)", textShadowRadius: 30 }}>
             {a.name}
           </Text>
           {meta ? <Text color="rgba(255,255,255,0.78)">{meta}</Text> : null}

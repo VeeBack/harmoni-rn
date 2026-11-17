@@ -114,7 +114,7 @@ export function Progress({ sheetPan }: { sheetPan?: GestureType }) {
 function Toggle({ on, icon, label, onPress, badge }: { on: boolean; icon: "shuffle" | "repeat"; label: string; onPress: () => void; badge?: boolean }) {
   return (
     <Press onPress={onPress} feedback={on ? "toggleOff" : "toggleOn"} scaleTo={0.9} accessibilityLabel={label} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-      <Icon name={icon} size={22} color={on ? "#fff" : W(0.55)} />
+      <Icon name={icon} size={21} color={on ? "#fff" : W(0.55)} />
       {badge ? (
         <View style={{ position: "absolute", top: 5, right: 5, minWidth: 12, height: 12, borderRadius: 6, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}>
           <Text size={9} weight={700} color="rgba(0,0,0,0.75)" style={{ lineHeight: 11 }}>
@@ -134,7 +134,7 @@ export function Controls() {
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 14 }}>
       <Toggle on={pb.shuffle} icon="shuffle" label={pb.shuffle ? "Shuffle on" : "Shuffle"} onPress={() => player.setShuffle(!pb.shuffle)} />
       <Press disabled={none} onPress={() => player.prev()} scaleTo={0.88} accessibilityLabel="Previous" style={{ padding: 4, opacity: none ? 0.35 : 1 }}>
-        <Icon name="prev" size={40} color={W(0.85)} />
+        <Icon name="prev" size={36} color={W(0.8)} />
       </Press>
       <Press
         disabled={none}
@@ -142,12 +142,12 @@ export function Controls() {
         feedback={pb.playing ? "toggleOff" : "toggleOn"}
         scaleTo={0.9}
         accessibilityLabel={pb.buffering && pb.playing ? "Loading" : pb.playing ? "Pause" : "Play"}
-        style={{ width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", opacity: none ? 0.35 : 1 }}
+        style={{ width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", opacity: none ? 0.35 : 1 }}
       >
-        {pb.buffering && pb.playing ? <Spinner size={44} color="#fff" /> : <Icon name={pb.playing ? "pause" : "play"} size={56} color="#fff" />}
+        {pb.buffering && pb.playing ? <Spinner size={40} color="#fff" /> : <Icon name={pb.playing ? "pause" : "play"} size={48} color="#fff" />}
       </Press>
       <Press disabled={none} onPress={() => player.next()} scaleTo={0.88} accessibilityLabel="Next" style={{ padding: 4, opacity: none ? 0.35 : 1 }}>
-        <Icon name="next" size={40} color={W(0.85)} />
+        <Icon name="next" size={36} color={W(0.8)} />
       </Press>
       <Toggle
         on={pb.repeat !== "off"}

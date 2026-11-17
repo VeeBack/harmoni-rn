@@ -548,11 +548,6 @@ function Actions({
         </IconButton>
       ) : null}
       {has ? <View style={{ flex: 1 }} /> : null}
-      {findable ? (
-        <IconButton size={40} label="Find" onPress={onFind}>
-          <Icon name="search" size={20} color={colors.text2} />
-        </IconButton>
-      ) : null}
       {sortable ? (
         <Press
           onPress={openSort}
@@ -575,6 +570,11 @@ function Actions({
             {sortLabel}
           </Text>
         </Press>
+      ) : null}
+      {findable ? (
+        <IconButton size={40} label="Find" onPress={onFind}>
+          <Icon name="search" size={20} color={colors.text2} />
+        </IconButton>
       ) : null}
     </View>
   );

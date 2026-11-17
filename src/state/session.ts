@@ -47,6 +47,7 @@ export const useSession = create<SessionStore>((set, get) => ({
     await Native.signOut();
     resetOrigin();
     kv.remove("me");
+    kv.remove("listens.pending");
     set({ signedIn: false, server: null, me: null });
   },
 }));
@@ -54,9 +55,13 @@ export const useSession = create<SessionStore>((set, get) => ({
 /** Things to tidy before signing out (player, link, caches) register here. */
 export const signOutHooks: (() => Promise<void> | void)[] = [];
 
-Native.addListener("onSignedOut", () => {
+Native.addListener("onSignedOut", async () => {
+  // The server ended this sign-in: tidy up exactly like signing out here.
+  await signOutHooks.reduce((p, h) => p.then(h).catch(() => {}), Promise.resolve());
+  await Native.signOut().catch(() => {});
   resetOrigin();
   kv.remove("me");
+  kv.remove("listens.pending");
   useSession.setState({ signedIn: false, server: null, me: null });
 });
 

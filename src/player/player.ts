@@ -90,7 +90,7 @@ function setQueueState(queue: Entry[], index: number, extra: Partial<PlayerStore
   autoplayTries = 0;
   set({ queue, index, error: null, ...extra });
   persistExtra();
-  queueDirty = true;
+  queueDirty++;
   scheduleReport();
 }
 
@@ -121,7 +121,7 @@ const local = {
     const queue = s.queue.slice();
     queue.splice(s.index + 1, 0, stripQueueFields(song));
     set({ queue });
-    queueDirty = true;
+    queueDirty++;
     if (nativeLoaded) Native.insert(s.index + 1, json([queue[s.index + 1]]));
     scheduleReport();
   },
@@ -134,7 +134,7 @@ const local = {
     const queue = s.queue.slice();
     queue.splice(at, 0, stripQueueFields(song));
     set({ queue });
-    queueDirty = true;
+    queueDirty++;
     if (nativeLoaded) Native.insert(at, json([queue[at]]));
     scheduleReport();
   },
@@ -145,7 +145,7 @@ const local = {
     const queue = s.queue.slice();
     queue.splice(i, 1);
     set({ queue, index: i < s.index ? s.index - 1 : s.index });
-    queueDirty = true;
+    queueDirty++;
     if (nativeLoaded) Native.removeAt(i);
     scheduleReport();
   },
@@ -157,7 +157,7 @@ const local = {
     const [m] = queue.splice(from, 1);
     queue.splice(to, 0, m);
     set({ queue });
-    queueDirty = true;
+    queueDirty++;
     if (nativeLoaded) Native.move(from, to);
     scheduleReport();
   },
@@ -250,7 +250,7 @@ const local = {
     } else {
       set({ queue: unshuffleQueue(s.queue, s.index, s.unshuffled), unshuffled: null, shuffle: false });
     }
-    queueDirty = true;
+    queueDirty++;
     persistExtra();
     if (nativeLoaded) Native.replaceAround(json(get().queue), get().index);
     scheduleReport();
@@ -282,6 +282,14 @@ const local = {
     scheduleReport();
   },
 };
+
+/** Songs from the server's Link state or commands are stored as given: keep only real songs. */
+function isSong(x: unknown): x is Entry {
+  return !!x && typeof x === "object" && typeof (x as Entry).id === "string" && typeof (x as Entry).title === "string" && Array.isArray((x as Entry).artists);
+}
+function songsOnly(list: unknown): Entry[] {
+  return Array.isArray(list) ? list.filter(isSong) : [];
+}
 
 function stripQueueFields(s: QueueSong | Entry): Entry {
   const { autoplay: _a, pos: _p, ...rest } = s as Entry;
@@ -394,13 +402,14 @@ export const player = {
       const st = useLink.getState().state;
       if (st?.queue?.length) adopt(st, st.playing);
       await link.transfer(deviceId);
-      queueDirty = true;
+      queueDirty++;
       scheduleReport(true);
       return;
     }
     if (!isRemote() && get().index >= 0) {
-      await link.report(buildPatch(true), useLink.getState().active !== deviceId);
-      queueDirty = false;
+      const v = queueDirty;
+      const r = await link.report(buildPatch(true), useLink.getState().active !== deviceId);
+      if (r === "ok") queueAcked = v;
     }
     const ok = await link.transfer(to);
     if (!ok) toastHook?.("That device isn't online any more.", "error");
@@ -424,7 +433,7 @@ export function setPlayerToast(fn: (message: string, kind?: "error" | "info") =>
 // --- adopting state (Link hello / transfer / restore) ---
 
 function adopt(st: LinkState, play: boolean) {
-  const queue = (st.queue ?? []) as Entry[];
+  const queue = songsOnly(st.queue);
   const index = Math.max(0, Math.min(st.index, queue.length - 1));
   const pos = positionNow(st);
   autoplayGen++;
@@ -432,7 +441,7 @@ function adopt(st: LinkState, play: boolean) {
     queue,
     index: queue.length ? index : -1,
     shuffle: st.shuffle,
-    unshuffled: (st.unshuffled as Entry[] | null) ?? null,
+    unshuffled: st.unshuffled ? songsOnly(st.unshuffled) : null,
     repeat: st.repeat,
     volume: typeof st.volume === "number" ? st.volume : 1,
     muted: !!st.muted,
@@ -483,8 +492,8 @@ function applyNative(n: NativePlayerState) {
   if (!nativeLoaded || n.index === undefined) return;
   const s = get();
   const patch: Partial<PlayerStore> = {
-    playing: n.playWhenReady && !n.ended,
-    buffering: n.playWhenReady && n.buffering,
+    playing: n.playWhenReady && !n.ended && !n.idle,
+    buffering: n.playWhenReady && n.buffering && !n.idle,
     positionMs: n.positionMs,
     positionAt: Date.now(),
     durationMs: n.durationMs ?? s.queue[n.index]?.durationMs ?? null,
@@ -492,10 +501,41 @@ function applyNative(n: NativePlayerState) {
   if (n.index >= 0 && n.index !== s.index && n.index < s.queue.length && Date.now() > ignoreIndexUntil) patch.index = n.index;
   if (n.repeat && n.repeat !== s.repeat) patch.repeat = n.repeat;
   set(patch);
-  if (n.ended && !isRemote()) onQueueEnded();
+  const endedNow = n.ended && !wasEnded;
+  wasEnded = n.ended;
+  if (endedNow && !isRemote() && n.index === get().index) onQueueEnded();
+}
+let wasEnded = false;
+
+let adopting = false;
+/** Native started playing on its own (widget, headset, car) while JS wasn't driving it: take its queue. */
+async function adoptNative() {
+  if (adopting) return;
+  adopting = true;
+  try {
+    const q = await Native.getQueue();
+    if (!q?.live) return;
+    const queue = songsOnly(JSON.parse(q.queue));
+    if (!queue.length) return;
+    autoplayGen++;
+    nativeLoaded = true;
+    set({ queue, index: q.index, positionMs: q.positionMs, positionAt: Date.now() });
+    applyNative(Native.getState() as NativePlayerState);
+    queueDirty++;
+    claimIfNeeded();
+    checkAutoplay();
+  } catch {
+    // keep what we had
+  } finally {
+    adopting = false;
+  }
 }
 
 Native.addListener("onState", (n) => {
+  if (!nativeLoaded && n.count > 0 && n.playWhenReady && !n.idle) {
+    adoptNative();
+    return;
+  }
   const before = get();
   applyNative(n);
   const after = get();
@@ -534,7 +574,7 @@ Native.addListener("onTick", (t) => {
 });
 
 Native.addListener("onError", ({ message }) => {
-  set({ error: message, buffering: false });
+  set({ error: message, buffering: false, playing: false });
   toastHook?.(message, "error");
   scheduleReport();
 });
@@ -580,6 +620,8 @@ export function flushPendingListens() {
 // --- autoplay ---
 
 let autoplayGen = 0;
+/** Next was pressed on the last song while a fetch was already running. */
+let playWhenAdded = false;
 let autoplayBusy = false;
 let autoplayTries = 0;
 let autoplayFor: string | null = null;
@@ -602,7 +644,10 @@ async function runAutoplay(thenPlay: boolean) {
     if (thenPlay) local.pause();
     return;
   }
-  if (autoplayBusy) return;
+  if (autoplayBusy) {
+    if (thenPlay) playWhenAdded = true;
+    return;
+  }
   const cur = s.queue[s.index];
   if (autoplayFor !== cur.id) {
     autoplayFor = cur.id;
@@ -623,7 +668,7 @@ async function runAutoplay(thenPlay: boolean) {
   let added = 0;
   try {
     const songs = await Api.autoplay(seeds, exclude);
-    if (gen !== autoplayGen) return;
+    if (gen !== autoplayGen || isRemote()) return;
     const now = get();
     const have = new Set(now.queue.map((q) => q.id));
     const fresh: Entry[] = songs.filter((x) => !have.has(x.id)).map((x) => ({ ...stripQueueFields(x), autoplay: true as const }));
@@ -631,10 +676,12 @@ async function runAutoplay(thenPlay: boolean) {
       added = fresh.length;
       const at = now.queue.length;
       set({ queue: [...now.queue, ...fresh] });
-      queueDirty = true;
+      queueDirty++;
       if (nativeLoaded) Native.insert(at, json(fresh));
+      trimPlayed();
       scheduleReport();
-      if (thenPlay) local.jumpTo(now.index + 1);
+      if (thenPlay || playWhenAdded) local.jumpTo(now.index + 1);
+      playWhenAdded = false;
     }
   } catch {
     // silent, like the web
@@ -643,8 +690,24 @@ async function runAutoplay(thenPlay: boolean) {
   }
   if (!added && gen === autoplayGen) {
     if (thenPlay && autoplayTries >= 4) local.pause();
-    else if (autoplayTries < 4) after(8000, () => (thenPlay ? runAutoplay(true) : checkAutoplay()));
+    else if (autoplayTries < 4)
+      after(8000, () => {
+        if (gen !== autoplayGen || isRemote()) return;
+        if (thenPlay) runAutoplay(true);
+        else checkAutoplay();
+      });
   }
+}
+
+/** The queue (and what Link stores) is capped at 500: drop the oldest played songs to make room. */
+function trimPlayed() {
+  const s = get();
+  const extra = Math.min(s.queue.length - 500, s.index);
+  if (extra <= 0) return;
+  set({ queue: s.queue.slice(extra), index: s.index - extra });
+  settle();
+  if (nativeLoaded) Native.removeRange(0, extra);
+  queueDirty++;
 }
 
 function onQueueEnded() {
@@ -659,6 +722,7 @@ function onQueueEnded() {
 
 /** Turning autoplay off removes upcoming autoplay songs. */
 export function dropAutoplaySongs() {
+  autoplayGen++;
   const s = get();
   const keep: Entry[] = [];
   const removeAt: number[] = [];
@@ -668,14 +732,16 @@ export function dropAutoplaySongs() {
   });
   if (!removeAt.length) return;
   set({ queue: keep });
-  queueDirty = true;
+  queueDirty++;
   if (nativeLoaded) for (const i of removeAt.reverse()) Native.removeAt(i);
   scheduleReport();
 }
 
 // --- Harmoni Link reporting ---
 
-let queueDirty = true;
+/** Bumped on every queue change; a report clears it only up to the version it carried. */
+let queueDirty = 1;
+let queueAcked = 0;
 let lastReportAt = 0;
 let reportTimer: (() => void) | null = null;
 let reporting = false;
@@ -703,7 +769,7 @@ function buildPatch(withQueue: boolean): ReportPatch {
 
 function claimIfNeeded() {
   if (useLink.getState().enabled && useLink.getState().active !== deviceId) {
-    queueDirty = true;
+    queueDirty++;
     scheduleReport(true);
   }
 }
@@ -730,20 +796,22 @@ async function sendReport() {
   // A paused device that isn't active doesn't report (it's a remote, or nobody's playing).
   if (!active && !s.playing && l.active) return;
   reporting = true;
-  const withQueue = queueDirty;
+  // Taking over always carries the queue (the server would otherwise keep the other device's).
+  const version = queueDirty;
+  const withQueue = version !== queueAcked || !active;
   lastReportAt = Date.now();
   const result = await link.report(buildPatch(withQueue), !active && s.playing);
   reporting = false;
   if (result === "ok") {
-    if (withQueue) queueDirty = false;
+    if (withQueue) queueAcked = Math.max(queueAcked, version);
   } else if (result === "stale") {
     // a newer report won
   } else if (result === "not-playing") {
-    queueDirty = true;
+    queueDirty++;
     local.pause();
     link.reconnect();
   } else {
-    queueDirty = true;
+    queueDirty++;
     if (result === "gone") link.reconnect();
   }
 }
@@ -753,10 +821,10 @@ function validCommand(c: LinkCommand): boolean {
   const isInt = (n: unknown) => typeof n === "number" && Number.isInteger(n);
   switch (c.type) {
     case "play":
-      return Array.isArray(c.songs) && isInt(c.startIndex);
+      return Array.isArray(c.songs) && c.songs.length > 0 && c.songs.every(isSong) && isInt(c.startIndex);
     case "playNext":
     case "addToQueue":
-      return !!c.song && typeof c.song.id === "string";
+      return isSong(c.song);
     case "removeFromQueue":
     case "jumpTo":
       return isInt(c.index) && typeof c.songId === "string";
@@ -836,10 +904,10 @@ setLinkHandler((e: LinkEvent) => {
     case "hello": {
       const s = get();
       if (e.active === deviceId) {
-        queueDirty = true;
+        queueDirty++;
         scheduleReport(true);
       } else if (s.playing && nativeLoaded) {
-        queueDirty = true;
+        queueDirty++;
         scheduleReport(true); // claim: we're playing right now
       } else if (e.active && e.active !== deviceId) {
         lastRemoteState = e.state;
@@ -871,16 +939,20 @@ setLinkHandler((e: LinkEvent) => {
       lastRemoteState = null;
       if (e.state?.queue?.length) {
         adopt(e.state, e.play);
-        queueDirty = false; // we just loaded the server's queue
+        queueAcked = queueDirty; // we just loaded the server's queue
         scheduleReport(true);
       }
       break;
     case "release":
       lastRemoteState = useLink.getState().state;
+      autoplayGen++; // anything autoplay was fetching is no longer ours to play
       if (nativeLoaded) {
-        Native.pause();
-        set({ playing: false });
+        // Stop rather than pause, so a stray play (headset, car, notification) can't quietly take playback back.
+        pendingPosition = livePosition();
+        Native.stop();
+        nativeLoaded = false;
       }
+      set({ playing: false, buffering: false });
       break;
   }
 });
@@ -896,7 +968,9 @@ onTick(() => {
 
 signOutHooks.push(async () => {
   link.disconnect();
+  lastRemoteState = null;
   await player.clear();
+  kv.remove("listens.pending");
 });
 
 /** One place for UI to read "what's playing", local or remote. */

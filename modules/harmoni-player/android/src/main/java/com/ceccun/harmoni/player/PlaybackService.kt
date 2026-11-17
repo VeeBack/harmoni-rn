@@ -56,6 +56,13 @@ class PlaybackService : MediaLibraryService() {
   private val background by lazy { MoreExecutors.listeningDecorator(Core.io) }
   private val main = Handler(Looper.getMainLooper())
   private var authRetries = 0
+  private val skipAfterError = Runnable {
+    if (player.playerError != null && player.hasNextMediaItem()) {
+      player.seekToNextMediaItem()
+      player.prepare()
+      player.play()
+    }
+  }
   // Saves the playhead every 10 s while playing, so a killed app resumes close to where it was.
   private val saver = object : Runnable {
     override fun run() {
@@ -121,6 +128,7 @@ class PlaybackService : MediaLibraryService() {
     if (::player.isInitialized && player.mediaItemCount > 0) QueueStore.save(this, player)
     instance = null
     main.removeCallbacks(saver)
+    main.removeCallbacks(skipAfterError)
     sendBroadcast(
       Intent(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
         .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
@@ -148,6 +156,7 @@ class PlaybackService : MediaLibraryService() {
   private inner class ServiceListener : Player.Listener {
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
       authRetries = 0
+      main.removeCallbacks(skipAfterError)
       refreshButtons()
       QueueStore.save(this@PlaybackService, player)
       NowPlayingWidget.refresh(this@PlaybackService, player)
@@ -187,18 +196,15 @@ class PlaybackService : MediaLibraryService() {
       val network = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
         error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
       if (network) {
+        player.pause() // stays at the same spot; play tries again
         onError?.invoke("Can't reach the server. Check your connection.", item?.mediaId)
-        return // stays paused at the same spot; play tries again
+        return
       }
 
       onError?.invoke("Couldn't play $title.", item?.mediaId)
-      if (player.hasNextMediaItem()) {
-        main.postDelayed({
-          player.seekToNextMediaItem()
-          player.prepare()
-          player.play()
-        }, 600)
-      }
+      // Every source failed: move on (the API docs suggest skipping), unless the person picks something first.
+      main.removeCallbacks(skipAfterError)
+      if (player.hasNextMediaItem()) main.postDelayed(skipAfterError, 600)
     }
   }
 

@@ -17,6 +17,8 @@ object QueueStore {
   private fun file(context: Context) = File(context.filesDir, "queue.json")
 
   @Volatile private var lastQueueJson: String? = null
+  /** One writer, so saves never interleave in the temp file. */
+  private val writer = java.util.concurrent.Executors.newSingleThreadExecutor()
 
   /** Snapshot on the main thread, write in the background. */
   fun save(context: Context, player: Player) {
@@ -26,7 +28,7 @@ object QueueStore {
     val pos = player.currentPosition
     val repeat = player.repeatMode
     lastQueueJson = queue
-    Core.io.execute {
+    writer.execute {
       runCatching {
         val o = JSONObject().put("queue", JSONArray(queue)).put("index", index).put("positionMs", pos).put("repeat", repeat)
         val f = file(context)

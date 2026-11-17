@@ -86,6 +86,7 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   replaceAround(json: string, index: number): Promise<void>;
   insert(index: number, json: string): Promise<void>;
   removeAt(index: number): Promise<void>;
+  removeRange(from: number, to: number): Promise<void>;
   move(from: number, to: number): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;

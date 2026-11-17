@@ -34,6 +34,8 @@ object Core {
     private set
 
   val io = Executors.newFixedThreadPool(3)
+  /** Token and small JS-facing calls, so they never wait behind slow network work on [io]. */
+  val quick = Executors.newCachedThreadPool()
 
   fun init(context: Context) {
     if (!::app.isInitialized) app = context.applicationContext
@@ -112,9 +114,12 @@ object Core {
       .build()
   }
 
+  /** Songs from JSON; entries that aren't songs (no id) are skipped rather than crashing. */
   fun itemsFor(json: String): List<MediaItem> {
     val a = JSONArray(json)
-    return (0 until a.length()).map { itemFor(a.getJSONObject(it)) }
+    return (0 until a.length()).mapNotNull { i ->
+      runCatching { itemFor(a.getJSONObject(i)) }.getOrNull()
+    }
   }
 
   /** Gives an item that came through a MediaController (which strips the URI) its URI back. */
@@ -185,6 +190,23 @@ object Core {
   /** Asks the server to fetch and cache a song ahead of time (one byte back). */
   fun warm(songId: String) {
     if (isDownloaded(songId)) return
-    io.execute { api("GET", "/play/$songId", null, mapOf("Range" to "bytes=0-0")) }
+    val base = apiBase() ?: return
+    io.execute {
+      runCatching {
+        val token = AuthStore.freshToken(app) ?: return@runCatching
+        val c = URL("$base/play/$songId").openConnection() as HttpURLConnection
+        try {
+          c.connectTimeout = 20_000
+          c.readTimeout = 30_000
+          c.setRequestProperty("Authorization", "Bearer $token")
+          c.setRequestProperty("User-Agent", USER_AGENT)
+          c.setRequestProperty("Range", "bytes=0-0")
+          // One byte is enough; the server caches the rest. Some answers send the whole song, so don't read it.
+          if (c.responseCode in 200..299) c.inputStream.use { it.read() }
+        } finally {
+          c.disconnect()
+        }
+      }
+    }
   }
 }
