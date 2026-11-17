@@ -111,6 +111,9 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
 
   getArtworkColors(url: string): Promise<ArtworkColors | null>;
 
+  hasEqualizer(): boolean;
+  openEqualizer(): Promise<boolean>;
+
   canPinWidget(): boolean;
   hasWidget(): boolean;
   pinWidget(): Promise<boolean>;

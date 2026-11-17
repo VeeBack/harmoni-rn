@@ -255,6 +255,9 @@ function PlaybackGroup() {
       <Row title="Keep the screen on for lyrics" note="While the lyrics are showing, the screen won't dim or lock.">
         <Switch value={keepAwake} onChange={setKeepAwake} />
       </Row>
+      {Native.hasEqualizer() ? (
+        <Row title="Equalizer" note="Shape the sound with your phone's equalizer." onPress={() => Native.openEqualizer()} />
+      ) : null}
       <Row title="Load the next song early" note="The next song starts straight away, even on a slow connection. Harmoni always does this on Android.">
         <Icon name="check" size={20} color={colors.accent} />
       </Row>

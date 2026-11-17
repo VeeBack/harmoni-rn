@@ -100,6 +100,13 @@ class PlaybackService : MediaLibraryService() {
 
     instance = this
     main.postDelayed(saver, 10_000)
+    // Lets equalizer apps (and the system one) attach to our audio.
+    sendBroadcast(
+      Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+    )
     playerListeners.toList().forEach { it(player) }
     refreshButtons()
   }
@@ -114,6 +121,11 @@ class PlaybackService : MediaLibraryService() {
     if (::player.isInitialized && player.mediaItemCount > 0) QueueStore.save(this, player)
     instance = null
     main.removeCallbacks(saver)
+    sendBroadcast(
+      Intent(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+    )
     session?.release()
     session = null
     player.release()

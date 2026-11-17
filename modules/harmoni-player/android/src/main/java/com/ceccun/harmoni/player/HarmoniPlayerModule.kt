@@ -623,6 +623,23 @@ class HarmoniPlayerModule : Module() {
       Core.io.execute { promise.resolve(runCatching { Core.downloadCache.cacheSpace.toDouble() }.getOrDefault(0.0)) }
     }
 
+    // --- equalizer ---
+
+    Function("hasEqualizer") {
+      val intent = android.content.Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+      intent.resolveActivity(context.packageManager) != null
+    }
+
+    AsyncFunction("openEqualizer") {
+      val activity = appContext.currentActivity ?: return@AsyncFunction false
+      val session = PlaybackService.instance?.player?.audioSessionId ?: 0
+      val intent = android.content.Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, session)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+        .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+      runCatching { activity.startActivityForResult(intent, 0x4551) }.isSuccess
+    }.runOnQueue(Queues.MAIN)
+
     // --- home screen widget ---
 
     Function("canPinWidget") {
