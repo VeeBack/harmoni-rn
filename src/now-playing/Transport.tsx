@@ -65,7 +65,7 @@ export function Progress({ sheetPan }: { sheetPan?: GestureType }) {
   };
 
   let pan = Gesture.Pan()
-    .minDistance(0)
+    .minDistance(2)
     .hitSlop({ top: 16, bottom: 16 })
     .onBegin((e) => {
       scrubbing.value = true;
@@ -87,6 +87,17 @@ export function Progress({ sheetPan }: { sheetPan?: GestureType }) {
       thick.value = withTiming(5, { duration: 200 });
     });
   if (sheetPan) pan = pan.blocksExternalGesture(sheetPan);
+  // A tap on the bar seeks there too, like clicking the web's slider.
+  const tap = Gesture.Tap()
+    .hitSlop({ top: 16, bottom: 16 })
+    .onEnd((e, ok) => {
+      if (!ok) return;
+      const f = Math.max(0, Math.min(1, e.x / Math.max(1, width.value)));
+      fraction.value = f;
+      runOnJS(setScrub)(true);
+      runOnJS(seek)(f);
+    });
+  const gesture = Gesture.Exclusive(pan, tap);
 
   const fill = useAnimatedStyle(() => ({ width: (scrubbing.value ? scrubFraction.value : fraction.value) * width.value }));
   const track = useAnimatedStyle(() => ({ height: thick.value, borderRadius: thick.value / 2 }));
@@ -97,7 +108,7 @@ export function Progress({ sheetPan }: { sheetPan?: GestureType }) {
       <Text size={12} color={W(0.65)} tabular style={{ width: 40 }}>
         {time(labels.pos)}
       </Text>
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={gesture}>
         <View style={{ flex: 1, height: 28, justifyContent: "center" }} onLayout={(e: LayoutChangeEvent) => (width.value = e.nativeEvent.layout.width)} accessibilityRole="adjustable" accessibilityLabel="Seek">
           <Animated.View style={[{ backgroundColor: W(0.22), overflow: "hidden" }, track]}>
             <Animated.View style={[{ height: "100%", backgroundColor: W(0.92) }, fill]} />
