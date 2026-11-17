@@ -140,6 +140,7 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
           </Animated.View>
         ) : null}
 
+        <Animated.View layout={LinearTransition.duration(220)}>
         <View style={{ height: 48, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", paddingLeft: 17, paddingRight: 6, gap: 10, marginBottom: 28 }}>
           <Icon name="search" size={18} color={colors.text2} />
           <TextInput
@@ -180,6 +181,7 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
           </Animated.View>
         )}
         <View style={{ height: 120 }} />
+        </Animated.View>
       </Screen>
 
       <View style={{ position: "absolute", left: 16, right: 16, bottom: dock + 12 - insets.bottom + insets.bottom, borderRadius: 16, backgroundColor: "rgba(36,36,36,0.97)", padding: 10, flexDirection: "row", alignItems: "center", gap: 12, elevation: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>

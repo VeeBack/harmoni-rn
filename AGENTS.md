@@ -39,3 +39,15 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## This project: Harmoni for Android
+
+See README.md for the layout. Things that are easy to get wrong:
+
+- **The API contract** is the server's `docs/api/reference.md` and `docs/api/README.md` (also served at `/developers`). The UI should look and behave like the web app in `../harmoni-next` (read-only for us: another agent works there; read `git show origin/main:<path>`).
+- **Native owns playback and tokens.** `modules/harmoni-player` (Kotlin, Media3) plays the queue, keeps the OAuth session encrypted, refreshes it, and does downloads and the widget. JS mirrors every queue change to native and takes the index from native events. Changing Kotlin or adding a native dependency needs `bunx expo prebuild` + a Gradle build; JS changes hot-reload.
+- **JS timers don't run in the background on Android.** Use `after()`/`onTick()` from `src/lib/heartbeat.ts` for anything periodic or delayed that must work with the screen off.
+- **Flex children shrink here.** A column taller than its container squashes its children to 0px (seen with the lyrics). Take overflowing content out of flex layout (`position: "absolute"`) or set `flexShrink: 0`. Text in a view with no height gets clipped: give it `alignSelf: "stretch"`.
+- **Shared values written from many JS callbacks at once** (e.g. `onLayout` of a list) lose writes: collect in a ref and publish once per frame.
+- **Harmoni Link is shared, live state** for the whole account. A test device that plays something takes playback away from the person's other devices. Run Metro with `EXPO_PUBLIC_DISABLE_LINK=1 EXPO_PUBLIC_NO_REPORTS=1 bunx expo start --dev-client --clear` when testing against a real account (`--clear` matters: Metro caches env vars).
+- Tests: `bun test src` (pure logic only). Typecheck: `bunx tsc --noEmit`.
