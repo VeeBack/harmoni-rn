@@ -1,0 +1,138 @@
+import Native, { type DownloadEvent } from "harmoni-player";
+import { create } from "zustand";
+
+import type { Song } from "@/api/types";
+
+export type DownloadState = "queued" | "downloading" | "done" | "failed" | "removing" | "stopped";
+
+export interface DownloadItem {
+  id: string;
+  state: DownloadState;
+  percent: number;
+  bytes: number;
+  updatedAt: number;
+  song: Song | null;
+}
+
+interface DownloadsStore {
+  items: Record<string, DownloadItem>;
+  loaded: boolean;
+  load: () => Promise<void>;
+}
+
+export const useDownloads = create<DownloadsStore>((set) => ({
+  items: {},
+  loaded: false,
+  load: async () => {
+    try {
+      const list = JSON.parse(await Native.getDownloads()) as (Omit<DownloadItem, "song"> & { song: Song | null })[];
+      const items: Record<string, DownloadItem> = {};
+      for (const d of list) items[d.id] = d;
+      set({ items, loaded: true });
+    } catch {
+      set({ loaded: true });
+    }
+  },
+}));
+
+Native.addListener("onDownload", (e: DownloadEvent) => {
+  useDownloads.setState((s) => {
+    const items = { ...s.items };
+    if (e.state === "removed") {
+      delete items[e.id];
+      return { items };
+    }
+    const prev = items[e.id];
+    let song = prev?.song ?? null;
+    if (e.song) {
+      try {
+        song = JSON.parse(e.song);
+      } catch {}
+    }
+    items[e.id] = {
+      id: e.id,
+      state: e.state,
+      percent: e.percent ?? prev?.percent ?? 0,
+      bytes: e.bytes ?? prev?.bytes ?? 0,
+      updatedAt: e.updatedAt ?? Date.now(),
+      song,
+    };
+    return { items };
+  });
+});
+
+Native.addListener("onTick", (t) => {
+  if (!t.downloads?.length) return;
+  useDownloads.setState((s) => {
+    const items = { ...s.items };
+    for (const d of t.downloads!) {
+      const prev = items[d.id];
+      if (prev) items[d.id] = { ...prev, percent: d.percent, state: d.state as DownloadState };
+    }
+    return { items };
+  });
+});
+
+const pendingSongs = new Map<string, Song>();
+
+export function download(songs: Song[]) {
+  const fresh = songs.filter((s) => {
+    const cur = useDownloads.getState().items[s.id];
+    return !cur || cur.state === "failed" || cur.state === "stopped";
+  });
+  if (!fresh.length) return 0;
+  useDownloads.setState((st) => {
+    const items = { ...st.items };
+    for (const s of fresh) {
+      pendingSongs.set(s.id, s);
+      items[s.id] = { id: s.id, state: "queued", percent: 0, bytes: 0, updatedAt: Date.now(), song: s };
+    }
+    return { items };
+  });
+  Native.download(JSON.stringify(fresh));
+  return fresh.length;
+}
+
+export function removeDownload(id: string) {
+  Native.removeDownload(id);
+}
+
+export function removeDownloads(ids: string[]) {
+  for (const id of ids) Native.removeDownload(id);
+}
+
+export function removeAllDownloads() {
+  Native.removeAllDownloads();
+}
+
+export const useDownloadState = (id: string | undefined) => useDownloads((s) => (id ? s.items[id]?.state : undefined));
+
+/** "all" when every song is saved, "some" while some are saving or saved, else "none". */
+export function useListDownloadState(songs: Song[] | undefined): { state: "none" | "some" | "all"; saving: number; saved: number } {
+  return useDownloads((s) => {
+    if (!songs?.length) return NONE;
+    let saved = 0;
+    let saving = 0;
+    for (const song of songs) {
+      const st = s.items[song.id]?.state;
+      if (st === "done") saved++;
+      else if (st === "queued" || st === "downloading") saving++;
+    }
+    const state = saved === songs.length ? "all" : saved + saving > 0 ? "some" : "none";
+    const key = `${state}:${saving}:${saved}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const v = { state, saving, saved } as const;
+    cache.set(key, v);
+    return v;
+  });
+}
+const NONE = { state: "none", saving: 0, saved: 0 } as const;
+const cache = new Map<string, { state: "none" | "some" | "all"; saving: number; saved: number }>();
+
+export function downloadedSongs(): Song[] {
+  return Object.values(useDownloads.getState().items)
+    .filter((d) => d.state === "done" && d.song)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((d) => d.song!);
+}

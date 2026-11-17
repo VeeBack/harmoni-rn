@@ -1,0 +1,6 @@
+{
+  "name": "harmoni-player",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/HarmoniPlayerModule.ts"
+}

@@ -1,0 +1,29 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.ceccun.harmoni.player'
+version = '1.0.0'
+
+def media3 = "1.11.1"
+
+android {
+  namespace "com.ceccun.harmoni.player"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation "androidx.media3:media3-exoplayer:$media3"
+  implementation "androidx.media3:media3-session:$media3"
+  implementation "androidx.media3:media3-datasource:$media3"
+  implementation "androidx.media3:media3-common:$media3"
+  implementation "androidx.palette:palette-ktx:1.0.0"
+  implementation "androidx.core:core-ktx:1.15.0"
+}

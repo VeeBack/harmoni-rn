@@ -1,0 +1,255 @@
+import { router } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Keyboard, TextInput, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+
+import type { ArtistCard, Song } from "@/api/types";
+import { artistLine } from "@/lib/format";
+import { inkFor, useArtworkColors, usePlayback } from "@/player/hooks";
+import { player } from "@/player/player";
+import { pickTopArtist } from "@/search/rank";
+import { streamSearch, type SearchState } from "@/search/stream";
+import { searchFocus } from "@/shell/state";
+import { ArtistRow, playSpice } from "@/song/cards";
+import { SongList } from "@/song/SongList";
+import { SpiceArt } from "@/spice/SpiceArt";
+import { Artwork } from "@/ui/Artwork";
+import { EmptyState, PlayButton, Section, Skeleton, SongRowsSkeleton } from "@/ui/bits";
+import { Icon } from "@/ui/Icon";
+import { Press } from "@/ui/Press";
+import { PageTitle, Screen, TopBar } from "@/ui/Screen";
+import { Text } from "@/ui/Text";
+import { colors, fonts, radius } from "@/ui/theme";
+import { kv } from "@/lib/storage";
+
+export default function Search() {
+  const [text, setText] = useState(kv.get("search.last", ""));
+  const [query, setQuery] = useState(text);
+  const [state, setState] = useState<SearchState | null>(null);
+  const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+
+  useEffect(() => {
+    searchFocus.current = () => input.current?.focus();
+    return () => {
+      searchFocus.current = null;
+    };
+  }, []);
+
+  // 450 ms after the last keystroke, like the web.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(text.trim()), 450);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  useEffect(() => {
+    kv.set("search.last", query);
+    if (!query) {
+      setState(null);
+      return;
+    }
+    const abort = new AbortController();
+    setState({ query, results: [], providers: [], spice: null, done: false, error: null });
+    streamSearch(query, (s) => !abort.signal.aborted && setState(s), abort.signal).catch(() => {
+      if (!abort.signal.aborted) setState((s) => (s ? { ...s, done: true, error: "failed" } : s));
+    });
+    return () => abort.abort();
+  }, [query]);
+
+  const field = (
+    <View style={{ flex: 1, height: 40, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", paddingLeft: 18, paddingRight: 8 }}>
+      <TextInput
+        ref={input}
+        value={text}
+        onChangeText={setText}
+        placeholder="Search songs, artists…"
+        placeholderTextColor={colors.text3}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
+        returnKeyType="search"
+        autoCorrect={false}
+        autoCapitalize="none"
+        spellCheck={false}
+        onSubmitEditing={() => {
+          setQuery(text.trim());
+          Keyboard.dismiss();
+        }}
+        style={{ flex: 1, color: colors.text, fontFamily: fonts[400], fontSize: 16, paddingVertical: 0 }}
+      />
+      {text ? (
+        <Press onPress={() => { setText(""); input.current?.focus(); }} feedback="tap" scaleTo={0.85} hitSlop={8} accessibilityLabel="Clear" style={{ padding: 6 }}>
+          <Icon name="close" size={18} color={colors.text2} />
+        </Press>
+      ) : (
+        <View style={{ padding: 6 }}>
+          <Icon name="search" size={18} color={colors.text2} />
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <Screen tab="(search)" topBar={<TopBar center={field} />} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
+      {!state ? (
+        <View>
+          <PageTitle subtitle="What are you in the mood for?">Search</PageTitle>
+          <EmptyState title="Type in the search bar up top" body="Songs, artists, lyrics you half remember. Harmoni checks every source at once." icon="search" />
+        </View>
+      ) : (
+        <Results state={state} />
+      )}
+    </Screen>
+  );
+}
+
+function Results({ state }: { state: SearchState }) {
+  const { results, spice } = state;
+  const artists = useMemo(() => {
+    const map = new Map<string, ArtistCard & { songs: number; cover?: string }>();
+    for (const s of results) {
+      for (const a of s.artists) {
+        if (!a.id) continue;
+        const e = map.get(a.id);
+        if (e) e.songs++;
+        else map.set(a.id, { id: a.id, name: a.name, songs: 1, cover: s.artworkUrl });
+      }
+    }
+    return [...map.values()];
+  }, [results]);
+  const topArtist = useMemo(() => (results.length ? pickTopArtist(state.query, artists, results[0]) : undefined), [state.query, artists, results]);
+
+  if (!results.length && !state.done) return <SearchSkeleton />;
+  if (state.error && !results.length)
+    return (
+      <View style={{ marginTop: 16 }}>
+        <EmptyState title="Search hit a snag" body="Something went wrong talking to the server. Give it another go in a moment." icon="cloud-off" />
+      </View>
+    );
+  if (!results.length)
+    return (
+      <View style={{ marginTop: 16 }}>
+        <EmptyState title="Nothing turned up" body={`No sources had anything for “${state.query}”. Check the spelling, or try the artist's name on its own.`} />
+      </View>
+    );
+
+  return (
+    <Animated.View entering={FadeIn.duration(200)}>
+      {spice ? <SpiceResult spice={spice} /> : null}
+      <Section title="Top result" style={{ marginTop: spice ? 24 : 16 }}>
+        {topArtist ? <TopArtist artist={topArtist} results={results} /> : <TopSong song={results[0]} />}
+      </Section>
+      <Section title="Songs">
+        <SongList songs={results.slice(0, 5)} single />
+      </Section>
+      {artists.length ? (
+        <Section title="Artists">
+          <ArtistRow artists={artists.slice(0, 10)} fallbacks={Object.fromEntries(artists.map((a) => [a.id, a.cover]))} />
+        </Section>
+      ) : null}
+      {results.length > 5 ? (
+        <Section title="More songs">
+          <SongList songs={results.slice(5)} single />
+        </Section>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+function SearchSkeleton() {
+  return (
+    <View style={{ marginTop: 16 }}>
+      <Skeleton width={120} height={26} />
+      <Skeleton height={260} radius={24} style={{ marginTop: 16 }} />
+      <Skeleton width={90} height={26} style={{ marginTop: 32, marginBottom: 16 }} />
+      <SongRowsSkeleton />
+      <Skeleton width={100} height={26} style={{ marginTop: 32, marginBottom: 16 }} />
+      <View style={{ flexDirection: "row", gap: 14 }}>
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} width={104} height={104} round />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
+  const [loading, setLoading] = useState(false);
+  return (
+    <Press
+      onPress={() => router.push(`/spice/${spice.id}`)}
+      feedback="tap"
+      scaleTo={0.98}
+      ripple
+      style={{ marginTop: 16, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 10, paddingRight: 14, flexDirection: "row", alignItems: "center", gap: 14, overflow: "hidden" }}
+    >
+      <View style={{ width: 68, height: 68, borderRadius: 12, overflow: "hidden" }}>
+        <SpiceArt name={spice.name} covers={spice.covers} label={false} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text size={11} weight={700} color={colors.text2} style={{ letterSpacing: 2 }}>
+          SPICE
+        </Text>
+        <Text size={18} weight={700} numberOfLines={1} style={{ letterSpacing: -0.36 }}>
+          {spice.name}
+        </Text>
+        <Text size={13} color={colors.text2} numberOfLines={2}>
+          {spice.name} picked for you, different every day
+        </Text>
+      </View>
+      <PlayButton
+        loading={loading}
+        onPress={async () => {
+          setLoading(true);
+          await playSpice(spice);
+          setLoading(false);
+        }}
+      />
+    </Press>
+  );
+}
+
+function HeroCard({ art, round, title, meta, onPress, playing, onPlay }: { art?: string; round?: boolean; title: string; meta: string; onPress: () => void; playing: boolean; onPlay: () => void }) {
+  const theme = useArtworkColors(art);
+  const { ink, inkMuted } = theme ? inkFor(theme) : { ink: colors.text, inkMuted: colors.text2 };
+  return (
+    <Press onPress={onPress} feedback="tap" scaleTo={0.98} style={{ padding: 20, borderRadius: radius.xl, backgroundColor: theme?.color ?? colors.surface2, gap: 20 }}>
+      <View style={{ elevation: round ? 10 : 0, shadowColor: "#000", alignSelf: "flex-start", borderRadius: round ? 68 : 16 }}>
+        <Artwork url={art} size={136} round={round} radius={16} fallback={round ? "user" : "music"} />
+      </View>
+      <View style={{ paddingRight: 64, gap: 4 }}>
+        <Text size={28} weight={700} color={ink} numberOfLines={2} style={{ letterSpacing: -0.56, lineHeight: 31 }}>
+          {title}
+        </Text>
+        <Text color={inkMuted} numberOfLines={1}>
+          {meta}
+        </Text>
+      </View>
+      <View style={{ position: "absolute", right: 24, bottom: 24 }}>
+        <PlayButton playing={playing} onPress={onPlay} bg={theme ? ink : colors.accent} fg={theme ? theme.color : colors.accentInk} />
+      </View>
+    </Press>
+  );
+}
+
+function TopSong({ song }: { song: Song }) {
+  const pb = usePlayback();
+  const current = pb.song?.id === song.id;
+  const go = () => (current ? player.toggle() : player.play([song], 0));
+  return <HeroCard art={song.artworkUrl} title={song.title} meta={`Song · ${artistLine(song)}`} onPress={go} playing={current && pb.playing} onPlay={go} />;
+}
+
+function TopArtist({ artist, results }: { artist: ArtistCard & { cover?: string }; results: Song[] }) {
+  const pb = usePlayback();
+  const theirs = results.filter((s) => s.artists.some((a) => a.id === artist.id));
+  const current = !!pb.song && theirs.some((s) => s.id === pb.song!.id);
+  return (
+    <HeroCard
+      art={artist.imageUrl ?? artist.cover}
+      round
+      title={artist.name}
+      meta="Artist"
+      onPress={() => router.push(`/artist/${artist.id}`)}
+      playing={current && pb.playing}
+      onPlay={() => (current ? player.toggle() : player.play(theirs, 0))}
+    />
+  );
+}
