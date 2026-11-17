@@ -14,6 +14,7 @@ import { sized } from "@/ui/Artwork";
 import { ArtistRow, CardLink, Shelf as CardShelf, SongCard, useShelfWidth } from "@/song/cards";
 import { SongList } from "@/song/SongList";
 import { useSession } from "@/state/session";
+import { searchFocus } from "@/shell/state";
 import { Button } from "@/ui/Button";
 import { EmptyState, PlayButton, Section, Skeleton } from "@/ui/bits";
 import { Screen } from "@/ui/Screen";
@@ -223,7 +224,14 @@ function Hero({ data, name, mix, fresh }: { data: HomeData; name?: string; mix?:
         ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 8 }}>
           {fresh ? (
-            <Button label="Start searching" icon="search" onPress={() => router.navigate("/search")} />
+            <Button
+              label="Start searching"
+              icon="search"
+              onPress={() => {
+                router.navigate("/search");
+                setTimeout(() => searchFocus.current?.(), 350);
+              }}
+            />
           ) : (
             <>
               <PlayButton
