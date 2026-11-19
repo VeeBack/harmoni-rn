@@ -10,7 +10,7 @@ import { collectionsNow, libraryChanged } from "@/state/collections";
 import { useLibrary } from "@/state/library";
 import { queryClient } from "@/state/query";
 import { openMenu, prompt, toast, type MenuItem } from "@/ui/overlays";
-import { firstArtist } from "@/lib/format";
+import { artistLine, firstArtist } from "@/lib/format";
 import { startSpiceWith } from "@/spice/draft";
 
 export type Extra = Exclude<MenuItem, "divider">;
@@ -151,7 +151,11 @@ export function openSongMenu(song: Song, extras: Extra[] = [], opts: { fromNowPl
   // make sure the playlist list is there for "Add to playlist"
   queryClient.prefetchQuery({ queryKey: ["playlists"], queryFn: Api.playlists });
   queryClient.prefetchQuery({ queryKey: ["spices"], queryFn: Api.spices });
-  openMenu({ items: () => songMenuItems(song, extras, opts), label: `More options for ${song.title}` });
+  openMenu({
+    preview: { title: song.title, subtitle: artistLine(song), artwork: song.artworkUrl },
+    items: () => songMenuItems(song, extras, opts),
+    label: `More options for ${song.title}`,
+  });
 }
 
 export { errorMessage };

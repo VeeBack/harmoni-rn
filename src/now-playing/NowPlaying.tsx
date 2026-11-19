@@ -23,7 +23,7 @@ import { useIsLiked, useLibrary } from "@/state/library";
 import { useSession } from "@/state/session";
 import { Artwork } from "@/ui/Artwork";
 import { Icon, type IconName } from "@/ui/Icon";
-import { toast, useToastOffset } from "@/ui/overlays";
+import { toast } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { colors, layout, spring } from "@/ui/theme";
@@ -52,12 +52,10 @@ export function NowPlaying() {
       setMounted(true);
       if (y.value >= height - 1) y.value = height;
       y.value = withSpring(0, { ...spring.smooth, duration: 560, velocity: flick.value });
-      useToastOffset.setState({ bottom: 200 });
     } else {
       y.value = withSpring(height, { duration: 460, dampingRatio: 1, velocity: flick.value, overshootClamping: true }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
-      useToastOffset.setState({ bottom: layout.tabBar + layout.miniPlayer + 24 });
     }
     flick.value = 0;
   }, [open, height, y, flick]);

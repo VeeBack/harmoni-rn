@@ -1,28 +1,22 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeOut,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
 import { haptic } from "@/lib/haptics";
+import { Artwork } from "./Artwork";
 import { Icon, type IconName } from "./Icon";
 import { Press } from "./Press";
 import { Text } from "./Text";
-import { colors, fonts, layout, radius } from "./theme";
+import { colors, fonts, spring } from "./theme";
 
-const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
+/** The thick material menus and alerts are made of. */
+const SHEET = "#242321";
+const HAIR = StyleSheet.hairlineWidth;
 
-// ---------- Toasts ----------
+// ---------- Toasts: a HUD capsule that drops in from the top ----------
 
 interface Toast {
   id: number;
@@ -30,50 +24,62 @@ interface Toast {
   kind: "info" | "error";
 }
 
-const useToasts = create<{ toasts: Toast[] }>(() => ({ toasts: [] }));
+const useToasts = create<{ toast: Toast | null }>(() => ({ toast: null }));
 let toastId = 0;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function toast(message: string, kind: "info" | "error" = "info") {
   const id = ++toastId;
   if (kind === "error") haptic.reject();
-  useToasts.setState((s) => ({ toasts: [...s.toasts.slice(-2), { id, message, kind }] }));
-  setTimeout(() => useToasts.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 3200);
+  useToasts.setState({ toast: { id, message, kind } });
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => useToasts.setState((s) => (s.toast?.id === id ? { toast: null } : s)), 2600);
 }
 
-/** Bottom offset so toasts sit above the dock; screens can raise it (e.g. Now Playing). */
-export const useToastOffset = create<{ bottom: number }>(() => ({ bottom: layout.tabBar + layout.miniPlayer + 24 }));
+/** Kept for callers; toasts now sit at the top, clear of the dock and the player. */
+export const useToastOffset = create<{ bottom: number }>(() => ({ bottom: 0 }));
+
+const hudIn = () => {
+  "worklet";
+  return {
+    initialValues: { opacity: 0, transform: [{ translateY: -36 }, { scale: 0.86 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 160 }),
+      transform: [{ translateY: withSpring(0, spring.bouncy) }, { scale: withSpring(1, spring.bouncy) }],
+    },
+  };
+};
+const hudOut = () => {
+  "worklet";
+  return {
+    initialValues: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
+    animations: {
+      opacity: withTiming(0, { duration: 180 }),
+      transform: [{ translateY: withTiming(-24, { duration: 220, easing: Easing.in(Easing.quad) }) }, { scale: withTiming(0.92, { duration: 220 }) }],
+    },
+  };
+};
 
 function ToastHost() {
-  const toasts = useToasts((s) => s.toasts);
+  const t = useToasts((s) => s.toast);
   const insets = useSafeAreaInsets();
-  const bottom = useToastOffset((s) => s.bottom);
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { justifyContent: "flex-end", alignItems: "center", paddingBottom: bottom + insets.bottom, gap: 8 }]}>
-      {toasts.map((t) => (
-        <Animated.View
-          key={t.id}
-          entering={FadeIn.duration(240).withInitialValues({ transform: [{ translateY: 8 }] } as never)}
-          exiting={FadeOut.duration(200)}
-          style={{
-            backgroundColor: t.kind === "error" ? colors.danger : colors.accent,
-            paddingHorizontal: 18,
-            paddingVertical: 10,
-            borderRadius: radius.pill,
-            maxWidth: "88%",
-            elevation: 8,
-            shadowColor: "#000",
-          }}
-        >
-          <Text weight={500} color={t.kind === "error" ? "#2a0e0a" : colors.accentInk} align="center">
-            {t.message}
-          </Text>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { alignItems: "center", paddingTop: insets.top + 6 }]}>
+      {t ? (
+        <Animated.View key={t.id} entering={hudIn} exiting={hudOut} style={styles.hud}>
+          <Pressable onPress={() => useToasts.setState({ toast: null })} accessibilityRole="alert" style={styles.hudInner}>
+            {t.kind === "error" ? <Icon name="info" size={18} color={colors.danger} /> : null}
+            <Text variant="subhead" weight={600} numberOfLines={2} style={{ flexShrink: 1 }}>
+              {t.message}
+            </Text>
+          </Pressable>
         </Animated.View>
-      ))}
+      ) : null}
     </View>
   );
 }
 
-// ---------- Dialogs (prompt / confirm) ----------
+// ---------- Dialogs: alerts, with or without a field ----------
 
 interface DialogSpec {
   title: string;
@@ -90,21 +96,37 @@ interface DialogSpec {
 const useDialog = create<{ dialog: DialogSpec | null }>(() => ({ dialog: null }));
 
 export function prompt(opts: { title: string; note?: string; label?: string; defaultValue?: string; placeholder?: string; confirm?: string }): Promise<string | undefined> {
-  return new Promise((resolve) =>
-    useDialog.setState({ dialog: { ...opts, field: true, resolve: (v) => resolve(typeof v === "string" ? v : undefined) } }),
-  );
+  return new Promise((resolve) => useDialog.setState({ dialog: { ...opts, field: true, resolve: (v) => resolve(typeof v === "string" ? v : undefined) } }));
 }
 
 export function confirm(opts: { title: string; note?: string; confirm?: string; danger?: boolean }): Promise<boolean> {
   return new Promise((resolve) => useDialog.setState({ dialog: { ...opts, field: false, resolve: (v) => resolve(v === true) } }));
 }
 
+const alertIn = () => {
+  "worklet";
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 1.1 }] },
+    animations: { opacity: withTiming(1, { duration: 160 }), transform: [{ scale: withSpring(1, { duration: 420, dampingRatio: 0.82 }) }] },
+  };
+};
+const alertOut = () => {
+  "worklet";
+  return {
+    initialValues: { opacity: 1, transform: [{ scale: 1 }] },
+    animations: { opacity: withTiming(0, { duration: 150 }), transform: [{ scale: withTiming(0.94, { duration: 150 }) }] },
+  };
+};
+
 function DialogHost() {
   const dialog = useDialog((s) => s.dialog);
   const [value, setValue] = useState("");
   const { width } = useWindowDimensions();
   useEffect(() => {
-    if (dialog) setValue(dialog.defaultValue ?? "");
+    if (dialog) {
+      setValue(dialog.defaultValue ?? "");
+      haptic.tick();
+    }
   }, [dialog]);
   useEffect(() => {
     if (!dialog) return;
@@ -114,36 +136,22 @@ function DialogHost() {
     });
     return () => sub.remove();
   });
-  if (!dialog) return null;
   const close = (v: string | boolean | undefined) => {
+    if (!dialog) return;
     Keyboard.dismiss();
     dialog.resolve(v);
     useDialog.setState({ dialog: null });
   };
   const trimmed = value.trim();
-  const disabled = dialog.field && !trimmed;
-  return (
-    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center" }]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => close(dialog.field ? undefined : false)} />
-      <Animated.View
-        entering={FadeIn.duration(240).withInitialValues({ transform: [{ translateY: 8 }, { scale: 0.98 }] } as never)}
-        style={{
-          width: Math.min(420, width - 32),
-          backgroundColor: colors.surface,
-          borderColor: colors.borderStrong,
-          borderWidth: 1,
-          borderRadius: radius.xl,
-          padding: 28,
-          gap: 20,
-          elevation: 24,
-        }}
-      >
-        <View style={{ gap: 8 }}>
-          <Text size={24} weight={600}>
-            {dialog.title}
-          </Text>
+  const disabled = !!dialog?.field && !trimmed;
+  return dialog ? (
+    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(180)} style={[StyleSheet.absoluteFill, styles.scrim]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => close(dialog.field ? undefined : false)} accessible={false} importantForAccessibility="no" />
+      <Animated.View entering={alertIn} exiting={alertOut} style={[styles.alert, { width: Math.min(340, width - 48) }]}>
+        <View style={{ gap: 6 }}>
+          <Text variant="headline">{dialog.title}</Text>
           {dialog.note ? (
-            <Text size={13} color={colors.text2} style={{ lineHeight: 19 }}>
+            <Text variant="subhead" color={colors.text2}>
               {dialog.note}
             </Text>
           ) : null}
@@ -151,7 +159,7 @@ function DialogHost() {
         {dialog.field ? (
           <View style={{ gap: 6 }}>
             {dialog.label ? (
-              <Text size={13} color={colors.text2}>
+              <Text variant="footnote" color={colors.text2}>
                 {dialog.label}
               </Text>
             ) : null}
@@ -162,54 +170,39 @@ function DialogHost() {
               maxLength={100}
               placeholder={dialog.placeholder}
               placeholderTextColor={colors.text3}
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
+              selectionColor={colors.tint}
+              cursorColor={colors.tint}
               onSubmitEditing={() => !disabled && close(trimmed)}
               returnKeyType="done"
-              style={{
-                height: 48,
-                paddingHorizontal: 20,
-                borderRadius: radius.md,
-                borderWidth: 1,
-                borderColor: colors.borderStrong,
-                backgroundColor: colors.surface2,
-                color: colors.text,
-                fontFamily: fonts[400],
-                fontSize: 16,
-              }}
+              selectTextOnFocus
+              style={styles.field}
             />
           </View>
         ) : null}
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-          <Press onPress={() => close(dialog.field ? undefined : false)} style={{ height: 40, paddingHorizontal: 18, borderRadius: 999, justifyContent: "center" }}>
-            <Text weight={500} color={colors.text2}>
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+          <Press onPress={() => close(dialog.field ? undefined : false)} feedback="tap" scaleTo={0.96} style={[styles.alertButton, { backgroundColor: "rgba(255,255,255,0.09)" }]}>
+            <Text variant="callout" weight={600}>
               Cancel
             </Text>
           </Press>
           <Press
             disabled={disabled}
             feedback="confirm"
+            scaleTo={0.96}
             onPress={() => close(dialog.field ? trimmed : true)}
-            style={{
-              height: 40,
-              paddingHorizontal: 18,
-              borderRadius: 999,
-              justifyContent: "center",
-              backgroundColor: dialog.danger ? colors.danger : colors.accent,
-              opacity: disabled ? 0.5 : 1,
-            }}
+            style={[styles.alertButton, { backgroundColor: dialog.danger ? "rgba(255,107,94,0.16)" : colors.accent, opacity: disabled ? 0.45 : 1 }]}
           >
-            <Text weight={500} color={dialog.danger ? "#2a0d08" : colors.accentInk}>
+            <Text variant="callout" weight={600} color={dialog.danger ? colors.danger : colors.accentInk}>
               {dialog.confirm ?? (dialog.field ? "Save" : "OK")}
             </Text>
           </Press>
         </View>
       </Animated.View>
     </Animated.View>
-  );
+  ) : null;
 }
 
-// ---------- Menus (action sheets) ----------
+// ---------- Menus: an action sheet, with a preview of what it's for ----------
 
 export type MenuItem =
   | {
@@ -225,7 +218,16 @@ export type MenuItem =
     }
   | "divider";
 
+export interface MenuPreview {
+  title: string;
+  subtitle?: string;
+  artwork?: string | null;
+  round?: boolean;
+}
+
 interface MenuSpec {
+  /** What the menu is about: a song, an album… Shown at the top with its artwork. */
+  preview?: MenuPreview;
   header?: ReactNode;
   items: MenuItem[] | (() => MenuItem[]);
   label?: string;
@@ -247,27 +249,38 @@ export function refreshMenu() {
   useMenu.setState((s) => ({ version: s.version + 1 }));
 }
 
+/** Items split into groups at each divider. */
+function groups(items: MenuItem[]) {
+  const out: Exclude<MenuItem, "divider">[][] = [[]];
+  for (const it of items) {
+    if (it === "divider") {
+      if (out[out.length - 1].length) out.push([]);
+    } else out[out.length - 1].push(it);
+  }
+  return out.filter((g) => g.length);
+}
+
 function MenuHost() {
   const { menu, version } = useMenu();
   const [shown, setShown] = useState<MenuSpec | null>(null);
   const [stack, setStack] = useState<{ title: string; items: () => MenuItem[] }[]>([]);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const y = useSharedValue(600);
+  const y = useSharedValue(height);
   const backdrop = useSharedValue(0);
-  const sheetH = useRef(400);
+  const sheetH = useRef(height * 0.6);
   void version;
 
   useEffect(() => {
     if (menu) {
       setShown(menu);
       setStack([]);
-      y.value = sheetH.current + 40;
-      backdrop.value = withTiming(1, { duration: 240 });
-      y.value = withTiming(0, { duration: 320, easing: EASE });
+      y.value = sheetH.current + 80;
+      backdrop.value = withTiming(1, { duration: 260 });
+      y.value = withSpring(0, { duration: 480, dampingRatio: 0.9 });
     } else if (shown) {
-      backdrop.value = withTiming(0, { duration: 200 });
-      y.value = withTiming(sheetH.current + 40, { duration: 220, easing: Easing.in(Easing.quad) }, (done) => {
+      backdrop.value = withTiming(0, { duration: 220 });
+      y.value = withTiming(sheetH.current + 80, { duration: 240, easing: Easing.in(Easing.cubic) }, (done) => {
         if (done) runOnJS(setShown)(null);
       });
     }
@@ -288,11 +301,12 @@ function MenuHost() {
     .activeOffsetY(8)
     .failOffsetX([-20, 20])
     .onUpdate((e) => {
-      y.value = Math.max(0, e.translationY);
+      // Rubber band upwards, free downwards.
+      y.value = e.translationY > 0 ? e.translationY : -Math.sqrt(-e.translationY) * 2;
     })
     .onEnd((e) => {
       if (e.translationY > 90 || e.velocityY > 800) runOnJS(closeMenu)();
-      else y.value = withSpring(0, { damping: 20, stiffness: 240 });
+      else y.value = withSpring(0, { duration: 420, dampingRatio: 0.85, velocity: e.velocityY });
     });
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
@@ -301,107 +315,110 @@ function MenuHost() {
   if (!shown) return null;
   const top = stack[stack.length - 1];
   const base = typeof shown.items === "function" ? shown.items() : shown.items;
-  const items: MenuItem[] = top ? top.items() : base;
+  const list = groups(top ? top.items() : base);
+
+  const choose = (item: Exclude<MenuItem, "divider">) => {
+    if (item.disabled) return;
+    if (item.submenu) {
+      haptic.tick();
+      setStack((s) => [...s, { title: item.label, items: item.submenu! }]);
+      return;
+    }
+    if (!item.keepOpen) closeMenu();
+    else haptic.select();
+    item.onPress?.();
+    if (item.keepOpen) refreshMenu();
+  };
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={menu ? "auto" : "none"}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }, backdropStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.5)" }, backdropStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} accessibilityLabel="Close menu" />
       </Animated.View>
       <GestureDetector gesture={pan}>
         <Animated.View
           onLayout={(e) => (sheetH.current = e.nativeEvent.layout.height)}
           accessibilityLabel={shown.label}
-          style={[
-            {
-              position: "absolute",
-              left: 8,
-              right: 8,
-              bottom: 8 + insets.bottom,
-              maxHeight: height * 0.7,
-              borderRadius: radius.xl,
-              padding: 8,
-              backgroundColor: "rgba(40,38,36,0.97)",
-              elevation: 24,
-            },
-            sheetStyle,
-          ]}
+          style={[{ position: "absolute", left: 10, right: 10, bottom: 10 + insets.bottom, gap: 8 }, sheetStyle]}
         >
-          <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", marginBottom: 6, marginTop: 2 }} />
-          <ScrollView bounces={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
-            {top ? (
-              <>
-                <MenuRow item={{ label: top.title, icon: "arrow-left" }} onPress={() => setStack((s) => s.slice(0, -1))} />
-                <Divider />
-              </>
-            ) : shown.header ? (
-              <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12 }}>{shown.header}</View>
-            ) : null}
-            {items.map((item, i) =>
-              item === "divider" ? (
-                <Divider key={`d${i}`} />
-              ) : (
-                <MenuRow
-                  key={`${item.label}${i}`}
-                  item={item}
-                  onPress={() => {
-                    if (item.disabled) return;
-                    if (item.submenu) {
-                      haptic.tick();
-                      setStack((s) => [...s, { title: item.label, items: item.submenu! }]);
-                      return;
-                    }
-                    if (!item.keepOpen) closeMenu();
-                    else haptic.select();
-                    item.onPress?.();
-                    if (item.keepOpen) refreshMenu();
-                  }}
-                />
-              ),
-            )}
-          </ScrollView>
+          <View style={[styles.sheet, { maxHeight: height * 0.72 - insets.top }]}>
+            <ScrollView bounces={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
+              <Animated.View key={stack.length} entering={FadeIn.duration(200)}>
+                {top ? (
+                  <Pressable onPress={() => setStack((s) => s.slice(0, -1))} style={({ pressed }) => [styles.subhead, pressed && styles.pressed]} accessibilityLabel={`Back from ${top.title}`}>
+                    <Icon name="chevron-left" size={20} color={colors.tint} />
+                    <Text variant="headline" numberOfLines={1} style={{ flex: 1 }}>
+                      {top.title}
+                    </Text>
+                  </Pressable>
+                ) : shown.preview ? (
+                  <View style={styles.preview}>
+                    <Artwork url={shown.preview.artwork ?? undefined} size={48} radius={shown.preview.round ? 24 : 8} round={shown.preview.round} />
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text variant="headline" numberOfLines={1}>
+                        {shown.preview.title}
+                      </Text>
+                      {shown.preview.subtitle ? (
+                        <Text variant="subhead" color={colors.text2} numberOfLines={1}>
+                          {shown.preview.subtitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ) : shown.header ? (
+                  <View style={styles.header}>{shown.header}</View>
+                ) : null}
+                {list.map((g, gi) => {
+                  const checks = g.some((it) => it.checked !== undefined);
+                  return (
+                    <View key={gi} style={gi > 0 || top || shown.preview || shown.header ? styles.groupGap : null}>
+                      {g.map((item, i) => (
+                        <MenuRow key={`${item.label}${i}`} item={item} checks={checks} last={i === g.length - 1} onPress={() => choose(item)} />
+                      ))}
+                    </View>
+                  );
+                })}
+              </Animated.View>
+            </ScrollView>
+          </View>
+          <Pressable onPress={closeMenu} style={({ pressed }) => [styles.cancel, pressed && { backgroundColor: "rgba(52,50,48,1)" }]} accessibilityLabel="Cancel">
+            <Text variant="headline" color={colors.tint}>
+              Cancel
+            </Text>
+          </Pressable>
         </Animated.View>
       </GestureDetector>
     </View>
   );
 }
 
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.borderStrong, marginVertical: 6, marginHorizontal: 4 }} />;
-}
-
-function MenuRow({ item, onPress }: { item: Exclude<MenuItem, "divider">; onPress: () => void }) {
+function MenuRow({ item, checks, last, onPress }: { item: Exclude<MenuItem, "divider">; checks: boolean; last: boolean; onPress: () => void }) {
   const color = item.danger ? colors.danger : colors.text;
   return (
     <Pressable
       onPress={onPress}
       disabled={item.disabled}
-      android_ripple={{ color: "rgba(255,255,255,0.08)", foreground: true }}
-      style={({ pressed }) => ({
-        minHeight: 52,
-        paddingHorizontal: 20,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-        borderRadius: radius.md,
-        overflow: "hidden",
-        opacity: item.disabled ? 0.6 : 1,
-        backgroundColor: pressed ? "rgba(255,255,255,0.06)" : "transparent",
-      })}
+      accessibilityRole="menuitem"
+      accessibilityState={{ checked: item.checked, disabled: item.disabled }}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed, item.disabled && { opacity: 0.4 }]}
     >
-      {item.icon ? <Icon name={item.icon} size={21} color={item.danger ? colors.danger : colors.text2} /> : null}
-      <View style={{ flex: 1, paddingVertical: item.detail ? 8 : 0 }}>
-        <Text size={17} color={color} numberOfLines={1}>
+      {checks ? <View style={{ width: 22 }}>{item.checked ? <Icon name="check" size={18} color={colors.tint} /> : null}</View> : null}
+      <View style={{ flex: 1, paddingVertical: 12, gap: 1 }}>
+        <Text variant="body" color={color} numberOfLines={1}>
           {item.label}
         </Text>
         {item.detail ? (
-          <Text size={13} color={colors.text2} numberOfLines={2} style={{ lineHeight: 17 }}>
+          <Text variant="footnote" color={colors.text2} numberOfLines={2}>
             {item.detail}
           </Text>
         ) : null}
       </View>
-      {item.checked ? <Icon name="check" size={22} color={colors.accent} /> : null}
-      {item.submenu ? <Icon name="arrow-right" size={18} color={colors.text3} /> : null}
+      {item.submenu ? (
+        <Icon name="chevron-right" size={18} color={colors.text3} />
+      ) : item.icon ? (
+        <Icon name={item.icon} size={20} color={item.danger ? colors.danger : colors.text} />
+      ) : null}
+      {last ? null : <View style={[styles.rowLine, { left: checks ? 56 : 20 }]} />}
     </Pressable>
   );
 }
@@ -416,3 +433,29 @@ export function OverlayHost() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  hud: {
+    maxWidth: "86%",
+    borderRadius: 999,
+    backgroundColor: "rgba(44,43,41,0.98)",
+    borderWidth: HAIR,
+    borderColor: "rgba(255,255,255,0.1)",
+    elevation: 12,
+    shadowColor: "#000",
+  },
+  hudInner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, minHeight: 46 },
+  scrim: { backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
+  alert: { backgroundColor: SHEET, borderRadius: 30, padding: 22, paddingTop: 24, gap: 16, elevation: 24, borderWidth: HAIR, borderColor: "rgba(255,255,255,0.08)" },
+  field: { height: 46, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", color: colors.text, fontFamily: fonts[400], fontSize: 17 },
+  alertButton: { flex: 1, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  sheet: { backgroundColor: SHEET, borderRadius: 24, overflow: "hidden", borderWidth: HAIR, borderColor: "rgba(255,255,255,0.07)" },
+  cancel: { height: 56, borderRadius: 18, backgroundColor: SHEET, alignItems: "center", justifyContent: "center", borderWidth: HAIR, borderColor: "rgba(255,255,255,0.07)" },
+  preview: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
+  header: { paddingHorizontal: 20, paddingVertical: 16 },
+  subhead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, height: 52 },
+  groupGap: { borderTopWidth: 8, borderTopColor: "rgba(0,0,0,0.3)" },
+  row: { minHeight: 50, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 14 },
+  rowLine: { position: "absolute", right: 0, bottom: 0, height: HAIR, backgroundColor: "rgba(255,255,255,0.1)" },
+  pressed: { backgroundColor: "rgba(255,255,255,0.08)" },
+});

@@ -256,6 +256,8 @@ export function Collection(p: CollectionProps) {
                 onFind={startFind}
                 menu={p.menu}
                 menuLabel={p.menuLabel}
+                artwork={firstArt}
+                subtitle={typeof p.meta === "string" ? p.meta : p.kind}
               />
             ) : null
           }
@@ -308,6 +310,8 @@ function Toolbar({
   onFind,
   menu,
   menuLabel,
+  artwork,
+  subtitle,
 }: {
   songs: Song[];
   title: string;
@@ -321,6 +325,8 @@ function Toolbar({
   onFind: () => void;
   menu?: () => MenuItem[];
   menuLabel?: string;
+  artwork?: string | null;
+  subtitle?: string;
 }) {
   const dl = useListDownloadState(songs);
   const askRemove = async () => {
@@ -343,6 +349,7 @@ function Toolbar({
     if (dl.saved + dl.saving === 0) return;
     openMenu({
       label: "Downloads",
+      preview: { title, subtitle: `${plural(dl.saved, "song")} on this phone`, artwork },
       items: [
         ...(dl.state !== "all" ? [{ label: "Download the rest", icon: "download" as const, onPress: onDownload }] : []),
         { label: `Remove ${plural(dl.saved + dl.saving, "download")}`, icon: "trash" as const, danger: true, onPress: askRemove },
@@ -353,6 +360,7 @@ function Toolbar({
   const openMore = () =>
     openMenu({
       label: menuLabel ?? title,
+      preview: { title, subtitle, artwork },
       items: () => {
         const items: MenuItem[] = [];
         if (findLabel) items.push({ label: findLabel, icon: "search", onPress: onFind });
