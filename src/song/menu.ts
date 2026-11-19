@@ -11,7 +11,10 @@ import { useLibrary } from "@/state/library";
 import { queryClient } from "@/state/query";
 import { openMenu, prompt, toast, type MenuItem } from "@/ui/overlays";
 import { artistLine, firstArtist } from "@/lib/format";
+import { copyLink, shareLink, songPath } from "@/lib/share";
+import { PINNED_MAX } from "@/profile/style";
 import { startSpiceWith } from "@/spice/draft";
+import { useSession } from "@/state/session";
 
 export type Extra = Exclude<MenuItem, "divider">;
 
@@ -70,6 +73,22 @@ function addToPlaylistItems(song: Song): MenuItem[] {
   return items;
 }
 
+/** Puts a song on display on your profile, or takes it off. */
+export async function togglePin(song: Song) {
+  const session = useSession.getState();
+  const pinned = session.me?.pinned ?? [];
+  const on = !pinned.includes(song.id);
+  if (on && pinned.length >= PINNED_MAX) return toast(`Your profile shows ${PINNED_MAX} songs. Take one off first.`, "error");
+  try {
+    const r = await Api.pin(song.id, on);
+    if (session.me) session.setMe({ ...session.me, pinned: r.pinned });
+    queryClient.invalidateQueries({ queryKey: ["profile"] });
+    toast(on ? "On display on your profile" : "Taken off your profile");
+  } catch {
+    toast("Couldn't change your profile.", "error");
+  }
+}
+
 export function songMenuItems(song: Song, extras: Extra[] = [], opts: { fromNowPlaying?: boolean } = {}): MenuItem[] {
   const liked = useLibrary.getState().isLiked(song.id);
   const dl = useDownloads.getState().items[song.id]?.state;
@@ -99,7 +118,11 @@ export function songMenuItems(song: Song, extras: Extra[] = [], opts: { fromNowP
     {
       label: liked ? "Remove from Liked" : "Add to Liked",
       icon: liked ? "heart-solid" : "heart",
-      onPress: () => useLibrary.getState().toggleLike(song).catch(() => toast("Couldn't save that. Try again?", "error")),
+      onPress: () =>
+        useLibrary
+          .getState()
+          .toggleLike(song)
+          .catch(() => toast("Couldn't save that. Try again?", "error")),
     },
     dl === "done" || dl === "queued" || dl === "downloading"
       ? {
@@ -116,6 +139,25 @@ export function songMenuItems(song: Song, extras: Extra[] = [], opts: { fromNowP
           },
         },
   ];
+  const me = useSession.getState().me;
+  if (me?.pinned) {
+    const pinned = me.pinned.includes(song.id);
+    items.push({
+      label: pinned ? "Take off your profile" : "Show on your profile",
+      icon: pinned ? "pin-solid" : "pin",
+      onPress: () => togglePin(song),
+    });
+  }
+  items.push(
+    "divider",
+    { label: "Share…", icon: "share", onPress: () => shareLink(songPath(song.id), song.title) },
+    {
+      label: "Copy link",
+      icon: "copy",
+      onPress: () => copyLink(songPath(song.id)).then((ok) => (ok ? toast("Link copied") : toast("Couldn't copy the link.", "error"))),
+    },
+    "divider",
+  );
   const albumId = song.album?.id;
   const artist = song.artists.find((a) => a.id) ?? firstArtist(song);
   if (albumId) items.push({ label: "Go to album", icon: "disc", onPress: () => go(`/album/${albumId}`) });

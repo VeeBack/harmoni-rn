@@ -1,7 +1,15 @@
 import { useEffect, type ReactNode } from "react";
 import { View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { Easing, makeMutable, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  makeMutable,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import { haptic } from "@/lib/haptics";
 import { Button } from "./Button";
@@ -15,10 +23,27 @@ import { colors, radius } from "./theme";
  * A section, as in Apple Music: a bold title; when it leads somewhere the whole
  * header is tappable and ends in a chevron.
  */
-export function Section({ title, link, onLink, action, children, style }: { title: string; link?: string; onLink?: () => void; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Section({
+  title,
+  link,
+  onLink,
+  action,
+  children,
+  style,
+  titleFont,
+}: {
+  title: string;
+  link?: string;
+  onLink?: () => void;
+  action?: ReactNode;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  /** A font family for the title (a profile's own font). */
+  titleFont?: string;
+}) {
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}>
-      <Text variant="title2" numberOfLines={1} style={{ flexShrink: 1 }}>
+      <Text variant="title2" numberOfLines={1} style={[{ flexShrink: 1 }, titleFont ? { fontFamily: titleFont } : null]}>
         {title}
       </Text>
       {onLink ? <Icon name="chevron-right" size={20} color={colors.text3} /> : null}
@@ -26,9 +51,20 @@ export function Section({ title, link, onLink, action, children, style }: { titl
   );
   return (
     <View style={[{ marginTop: 36 }, style]}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, minHeight: 32 }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, minHeight: 32 }}
+      >
         {onLink ? (
-          <Press onPress={onLink} feedback="tap" scaleTo={1} dim hitSlop={8} accessibilityRole="button" accessibilityLabel={link ? `${title}, ${link}` : title} style={{ flexShrink: 1 }}>
+          <Press
+            onPress={onLink}
+            feedback="tap"
+            scaleTo={1}
+            dim
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={link ? `${title}, ${link}` : title}
+            style={{ flexShrink: 1 }}
+          >
             {header}
           </Press>
         ) : (
@@ -42,11 +78,33 @@ export function Section({ title, link, onLink, action, children, style }: { titl
 }
 
 /** Nothing here yet: a quiet, centred note with an optional button (HIG empty state). */
-export function EmptyState({ title, body, action, onAction, icon }: { title: string; body?: string; action?: string; onAction?: () => void; icon?: IconName }) {
+export function EmptyState({
+  title,
+  body,
+  action,
+  onAction,
+  icon,
+}: {
+  title: string;
+  body?: string;
+  action?: string;
+  onAction?: () => void;
+  icon?: IconName;
+}) {
   return (
     <View style={{ alignItems: "center", paddingVertical: 36, paddingHorizontal: 24, gap: 8 }}>
       {icon ? (
-        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: colors.surface2,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 8,
+          }}
+        >
           <Icon name={icon} size={30} color={colors.text2} />
         </View>
       ) : null}
@@ -72,12 +130,30 @@ let shimmering = false;
  * A placeholder: a quiet fill with a soft band of light sweeping across it, in
  * step with every other placeholder on the page.
  */
-export function Skeleton({ width = "100%", height = 14, radius: r = 8, style, round, delay = 0 }: { width?: DimensionValue; height?: DimensionValue; radius?: number; style?: StyleProp<ViewStyle>; round?: boolean; delay?: number }) {
+export function Skeleton({
+  width = "100%",
+  height = 14,
+  radius: r = 8,
+  style,
+  round,
+  delay = 0,
+}: {
+  width?: DimensionValue;
+  height?: DimensionValue;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+  round?: boolean;
+  delay?: number;
+}) {
   const w = useSharedValue(0);
   useEffect(() => {
     if (shimmering) return;
     shimmering = true;
-    shimmer.value = withRepeat(withSequence(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.cubic) }), withTiming(1, { duration: 450 })), -1, false);
+    shimmer.value = withRepeat(
+      withSequence(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.cubic) }), withTiming(1, { duration: 450 })),
+      -1,
+      false,
+    );
   }, []);
   // Later rows lag a little, so the light seems to travel down the page.
   const lag = Math.min(0.3, delay / 1000);
@@ -92,7 +168,12 @@ export function Skeleton({ width = "100%", height = 14, radius: r = 8, style, ro
       style={[{ width, height, borderRadius: round ? 9999 : r, backgroundColor: colors.surface2, overflow: "hidden" }, style]}
     >
       <Animated.View style={[{ position: "absolute", top: 0, bottom: 0, left: 0 }, sweep]}>
-        <LinearGradient colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.055)", "rgba(255,255,255,0)"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+        <LinearGradient
+          colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.055)", "rgba(255,255,255,0)"]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ flex: 1 }}
+        />
       </Animated.View>
     </View>
   );
@@ -116,14 +197,39 @@ export function SongRowsSkeleton({ n = 5 }: { n?: number }) {
 }
 
 /** The 48px cream play button. */
-export function PlayButton({ playing, loading, onPress, size = 48, bg = colors.accent, fg = colors.accentInk, label }: { playing?: boolean; loading?: boolean; onPress: () => void; size?: number; bg?: string; fg?: string; label?: string }) {
+export function PlayButton({
+  playing,
+  loading,
+  onPress,
+  size = 48,
+  bg = colors.accent,
+  fg = colors.accentInk,
+  label,
+}: {
+  playing?: boolean;
+  loading?: boolean;
+  onPress: () => void;
+  size?: number;
+  bg?: string;
+  fg?: string;
+  label?: string;
+}) {
   return (
     <Press
       onPress={onPress}
       feedback={playing ? "toggleOff" : "toggleOn"}
       scaleTo={0.94}
       accessibilityLabel={loading ? "Loading" : playing ? "Pause" : (label ?? "Play")}
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: "#000" }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: bg,
+        alignItems: "center",
+        justifyContent: "center",
+        elevation: 6,
+        shadowColor: "#000",
+      }}
     >
       {loading ? <Spinner size={size * 0.46} color={fg} /> : <Icon name={playing ? "pause" : "play"} size={size * 0.46} color={fg} />}
     </Press>
@@ -132,7 +238,9 @@ export function PlayButton({ playing, loading, onPress, size = 48, bg = colors.a
 
 export function ExplicitBadge() {
   return (
-    <View style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center" }}
+    >
       <Text size={10} weight={700} color={colors.text2} style={{ lineHeight: 12 }}>
         E
       </Text>
@@ -140,13 +248,31 @@ export function ExplicitBadge() {
   );
 }
 
-export function SmallButton({ label, icon, onPress, accessibilityLabel }: { label: string; icon?: IconName; onPress: () => void; accessibilityLabel?: string }) {
+export function SmallButton({
+  label,
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  icon?: IconName;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
   return (
     <Press
       onPress={onPress}
       accessibilityLabel={accessibilityLabel ?? label}
       scaleTo={0.95}
-      style={{ height: 34, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.surface3, flexDirection: "row", alignItems: "center", gap: 6 }}
+      style={{
+        height: 34,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        backgroundColor: colors.surface3,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+      }}
     >
       {icon ? <Icon name={icon} size={16} color={colors.text} /> : null}
       <Text size={13} weight={500}>
@@ -179,7 +305,9 @@ export function Switch({ value, onChange, light }: { value: boolean; onChange: (
       accessibilityState={{ checked: value }}
       style={{ width: 46, height: 26, borderRadius: 13, backgroundColor: value ? trackOn : trackOff, justifyContent: "center" }}
     >
-      <Animated.View style={[{ width: 20, height: 20, borderRadius: 10, marginLeft: 3, backgroundColor: value ? knobOn : knobOff }, knob]} />
+      <Animated.View
+        style={[{ width: 20, height: 20, borderRadius: 10, marginLeft: 3, backgroundColor: value ? knobOn : knobOff }, knob]}
+      />
     </Press>
   );
 }

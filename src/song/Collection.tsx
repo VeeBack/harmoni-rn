@@ -40,7 +40,10 @@ function sortSongs(songs: Song[], s: Sort): Song[] {
   return songs
     .map((song, i) => ({ song, i }))
     .sort((a, b) => {
-      let c = s.field === "title" ? collator.compare(a.song.title, b.song.title) || collator.compare(a1(a.song), a1(b.song)) : collator.compare(a1(a.song), a1(b.song)) || collator.compare(a.song.title, b.song.title);
+      let c =
+        s.field === "title"
+          ? collator.compare(a.song.title, b.song.title) || collator.compare(a1(a.song), a1(b.song))
+          : collator.compare(a1(a.song), a1(b.song)) || collator.compare(a.song.title, b.song.title);
       if (s.descending) c = -c;
       return c || a.i - b.i;
     })
@@ -79,6 +82,8 @@ export interface CollectionProps {
   compact?: boolean;
   /** Shown after the kind in the small line (e.g. the year). */
   kindNote?: string;
+  /** More buttons in the nav bar, before download and the menu (Share). */
+  actions?: ReactNode;
 }
 
 /** An album, playlist, Spice or library list, laid out like Apple Music's. */
@@ -88,7 +93,11 @@ export function Collection(p: CollectionProps) {
   const { width } = useWindowDimensions();
   const scrollY = useSharedValue(0);
   const target = useRef<ComponentRef<typeof View>>(null);
-  const [sort, setSortState] = useState<Sort>(() => (p.sortKey ? kv.get<Record<string, Sort>>("sort", {})[p.sortKey] : undefined) ?? p.defaultSort ?? { field: "order", descending: false });
+  const [sort, setSortState] = useState<Sort>(
+    () =>
+      (p.sortKey ? kv.get<Record<string, Sort>>("sort", {})[p.sortKey] : undefined) ??
+      p.defaultSort ?? { field: "order", descending: false },
+  );
   const [query, setQuery] = useState("");
   const [finding, setFinding] = useState(false);
   const findRef = useRef<ComponentRef<typeof TextInput>>(null);
@@ -122,15 +131,29 @@ export function Collection(p: CollectionProps) {
   // The artwork drifts up a little slower than the page, and shrinks as it goes (parallax).
   // Pulled down, the artwork grows; scrolled up, it shrinks toward the top and fades (never into the title).
   const artStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(scrollY.value, [-200, 0], [-100, 0], "clamp") }, { scale: interpolate(scrollY.value, [-200, 0, artSize], [1.14, 1, 0.9], "clamp") }],
+    transform: [
+      { translateY: interpolate(scrollY.value, [-200, 0], [-100, 0], "clamp") },
+      { scale: interpolate(scrollY.value, [-200, 0, artSize], [1.14, 1, 0.9], "clamp") },
+    ],
     opacity: interpolate(scrollY.value, [artSize * 0.2, artSize * 0.95], [1, 0], "clamp"),
   }));
 
   const header = (
     <View>
-      <LinearGradient colors={[theme ? `${theme.color}66` : "rgba(60,56,50,0.35)", "rgba(12,11,10,0)"]} locations={[0, 1]} style={[StyleSheet.absoluteFill, { bottom: undefined, height: insets.top + TOPBAR + artSize + 120 }]} />
+      <LinearGradient
+        colors={[theme ? `${theme.color}66` : "rgba(60,56,50,0.35)", "rgba(12,11,10,0)"]}
+        locations={[0, 1]}
+        style={[StyleSheet.absoluteFill, { bottom: undefined, height: insets.top + TOPBAR + artSize + 120 }]}
+      />
       <View style={{ paddingTop: insets.top + TOPBAR + 12, paddingHorizontal: 20, alignItems: "center" }}>
-        <Animated.View entering={FadeIn.duration(450)} style={[styles.art, { width: artSize, height: artSize, borderRadius: p.round ? artSize / 2 : radius.md, transformOrigin: "50% 0%" }, artStyle]}>
+        <Animated.View
+          entering={FadeIn.duration(450)}
+          style={[
+            styles.art,
+            { width: artSize, height: artSize, borderRadius: p.round ? artSize / 2 : radius.md, transformOrigin: "50% 0%" },
+            artStyle,
+          ]}
+        >
           {p.art ?? <Artwork url={firstArt} size={artSize} radius={p.round ? artSize / 2 : radius.md} round={p.round} px={900} />}
         </Animated.View>
         <View style={{ alignSelf: "stretch", alignItems: "center", marginTop: 22, gap: 2 }}>
@@ -175,7 +198,12 @@ export function Collection(p: CollectionProps) {
               {plural(shown.length, "song")}
             </Text>
           ) : null}
-          <Press onPress={() => (query ? setQuery("") : setFinding(false))} accessibilityLabel={query ? "Clear" : "Close"} scaleTo={0.85} style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center" }}>
+          <Press
+            onPress={() => (query ? setQuery("") : setFinding(false))}
+            accessibilityLabel={query ? "Clear" : "Close"}
+            scaleTo={0.85}
+            style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center" }}
+          >
             <Icon name="close" size={16} color={colors.text2} />
           </Press>
         </Animated.View>
@@ -214,7 +242,15 @@ export function Collection(p: CollectionProps) {
             keyExtractor={(s, i) => `${s.id}:${i}`}
             renderItem={({ item, index }) => (
               <View style={{ paddingHorizontal: 20 }}>
-                <SongRow song={item} index={index} numbered={p.numbered} compact={p.compact} onPress={onPress} onMore={onMore} last={index === shown.length - 1} />
+                <SongRow
+                  song={item}
+                  index={index}
+                  numbered={p.numbered}
+                  compact={p.compact}
+                  onPress={onPress}
+                  onMore={onMore}
+                  last={index === shown.length - 1}
+                />
               </View>
             )}
             ListHeaderComponent={header}
@@ -258,6 +294,7 @@ export function Collection(p: CollectionProps) {
                 menuLabel={p.menuLabel}
                 artwork={firstArt}
                 subtitle={typeof p.meta === "string" ? p.meta : p.kind}
+                actions={p.actions}
               />
             ) : null
           }
@@ -286,7 +323,12 @@ function PlayShuffle({ songs, title }: { songs: Song[]; title: string }) {
           {playing ? "Pause" : "Play"}
         </Text>
       </Press>
-      <Press onPress={() => player.play(songs, Math.floor(Math.random() * songs.length), { shuffle: true })} scaleTo={0.96} accessibilityLabel="Shuffle" style={styles.capsule}>
+      <Press
+        onPress={() => player.play(songs, Math.floor(Math.random() * songs.length), { shuffle: true })}
+        scaleTo={0.96}
+        accessibilityLabel="Shuffle"
+        style={styles.capsule}
+      >
         <Icon name="shuffle" size={20} color={colors.tint} />
         <Text variant="headline" color={colors.tint}>
           Shuffle
@@ -312,7 +354,9 @@ function Toolbar({
   menuLabel,
   artwork,
   subtitle,
+  actions,
 }: {
+  actions?: ReactNode;
   songs: Song[];
   title: string;
   hideDownload?: boolean;
@@ -370,12 +414,42 @@ function Toolbar({
             icon: "sort",
             detail: `${sortLabel}, ${sort.descending ? "descending" : "ascending"}`,
             submenu: () => [
-              { label: orderLabel, icon: orderIcon, checked: sort.field === "order", keepOpen: true, onPress: () => onSort({ ...sort, field: "order" }) },
-              { label: "Title", icon: "music", checked: sort.field === "title", keepOpen: true, onPress: () => onSort({ ...sort, field: "title" }) },
-              { label: "Artist", icon: "user", checked: sort.field === "artist", keepOpen: true, onPress: () => onSort({ ...sort, field: "artist" }) },
+              {
+                label: orderLabel,
+                icon: orderIcon,
+                checked: sort.field === "order",
+                keepOpen: true,
+                onPress: () => onSort({ ...sort, field: "order" }),
+              },
+              {
+                label: "Title",
+                icon: "music",
+                checked: sort.field === "title",
+                keepOpen: true,
+                onPress: () => onSort({ ...sort, field: "title" }),
+              },
+              {
+                label: "Artist",
+                icon: "user",
+                checked: sort.field === "artist",
+                keepOpen: true,
+                onPress: () => onSort({ ...sort, field: "artist" }),
+              },
               "divider",
-              { label: "Ascending", icon: "arrow-up", checked: !sort.descending, keepOpen: true, onPress: () => onSort({ ...sort, descending: false }) },
-              { label: "Descending", icon: "arrow-down", checked: sort.descending, keepOpen: true, onPress: () => onSort({ ...sort, descending: true }) },
+              {
+                label: "Ascending",
+                icon: "arrow-up",
+                checked: !sort.descending,
+                keepOpen: true,
+                onPress: () => onSort({ ...sort, descending: false }),
+              },
+              {
+                label: "Descending",
+                icon: "arrow-down",
+                checked: sort.descending,
+                keepOpen: true,
+                onPress: () => onSort({ ...sort, descending: true }),
+              },
             ],
           });
         const own = menu?.() ?? [];
@@ -386,14 +460,37 @@ function Toolbar({
   const hasMore = !!findLabel || sortable || !!menu;
   return (
     <View style={{ flexDirection: "row", alignItems: "center" }}>
+      {actions}
       {!hideDownload && songs.length ? (
-        <IconButton label={dl.state === "all" ? "Downloaded" : dl.saving ? "Downloading" : "Download"} onPress={onDownload} onLongPress={onDownloadLong} size={40}>
-          {dl.saving > 0 ? <Spinner size={20} color={colors.tint} /> : <Icon name={dl.state === "all" ? "download-solid" : "download"} size={22} color={dl.state === "all" ? colors.accent : colors.tint} />}
+        <IconButton
+          label={dl.state === "all" ? "Downloaded" : dl.saving ? "Downloading" : "Download"}
+          onPress={onDownload}
+          onLongPress={onDownloadLong}
+          size={40}
+        >
+          {dl.saving > 0 ? (
+            <Spinner size={20} color={colors.tint} />
+          ) : (
+            <Icon
+              name={dl.state === "all" ? "download-solid" : "download"}
+              size={22}
+              color={dl.state === "all" ? colors.accent : colors.tint}
+            />
+          )}
         </IconButton>
       ) : null}
       {hasMore ? (
         <IconButton label={menuLabel ?? "More"} onPress={openMore} size={40} feedback="contextClick">
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(242,221,191,0.14)", alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: "rgba(242,221,191,0.14)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Icon name="ellipsis" size={18} color={colors.tint} />
           </View>
         </IconButton>
@@ -403,7 +500,34 @@ function Toolbar({
 }
 
 const styles = StyleSheet.create({
-  art: { overflow: "hidden", backgroundColor: colors.surface2, elevation: 24, shadowColor: "#000", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.06)" },
-  capsule: { flex: 1, height: 50, borderRadius: 14, backgroundColor: colors.surface2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  find: { marginHorizontal: 20, marginBottom: 12, height: 40, borderRadius: 12, backgroundColor: colors.surface2, flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 6, gap: 8 },
+  art: {
+    overflow: "hidden",
+    backgroundColor: colors.surface2,
+    elevation: 24,
+    shadowColor: "#000",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  capsule: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: colors.surface2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  find: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.surface2,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 12,
+    paddingRight: 6,
+    gap: 8,
+  },
 });

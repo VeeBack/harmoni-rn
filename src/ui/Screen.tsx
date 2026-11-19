@@ -21,6 +21,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { profilePath } from "@/lib/share";
+import { Avatar } from "@/profile/Avatar";
 import { registerScrollToTop } from "@/shell/state";
 import { TOPBAR, useContentBottom } from "@/shell/layout";
 import { useSession } from "@/state/session";
@@ -40,19 +42,22 @@ export const BlurTargetContext = createContext<Target | null>(null);
  * appears (the large title has scrolled away by then).
  */
 export function TopBar({
+  left,
   back,
   title,
   scrollY,
   titleAt = 44,
   center,
   right,
-  avatar = !back,
+  avatar = !back && !left,
   target,
   alwaysSolid,
   fill,
 }: {
   /** Fills the bar, left to right (a search field). */
   fill?: ReactNode;
+  /** Instead of the back button (Cancel while editing). */
+  left?: ReactNode;
   back?: boolean;
   title?: string;
   scrollY?: SharedValue<number>;
@@ -88,19 +93,20 @@ export function TopBar({
         <View style={{ flex: 1 }}>{fill}</View>
       ) : (
         <View style={styles.side}>
-          {back ? (
-            <Press
-              onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              scaleTo={1}
-              dim
-              hitSlop={12}
-              style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
-            >
-              <Icon name="chevron-left" size={26} color={colors.tint} />
-            </Press>
-          ) : null}
+          {left ??
+            (back ? (
+              <Press
+                onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                scaleTo={1}
+                dim
+                hitSlop={12}
+                style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+              >
+                <Icon name="chevron-left" size={26} color={colors.tint} />
+              </Press>
+            ) : null)}
         </View>
       )}
       {fill ? null : (
@@ -119,22 +125,12 @@ export function TopBar({
         {right}
         {avatar ? (
           <Press
-            onPress={() => router.navigate("/settings")}
-            accessibilityLabel="Settings"
+            onPress={() => (me?.username ? router.navigate(profilePath(me.username) as never) : router.navigate("/settings"))}
+            accessibilityLabel="Your profile"
             scaleTo={0.9}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: colors.surface3,
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: 6,
-            }}
+            style={{ marginLeft: 6 }}
           >
-            <Text variant="subhead" weight={600} color={colors.text}>
-              {me?.name?.trim()?.[0]?.toUpperCase() ?? "·"}
-            </Text>
+            <Avatar name={me?.name ?? ""} url={me?.avatarUrl} accent={me?.accent} size={32} />
           </Press>
         ) : null}
       </View>
@@ -163,6 +159,7 @@ export const Screen = forwardRef<
     bleedTop?: boolean;
     topBar?: ReactNode;
     right?: ReactNode;
+    left?: ReactNode;
     scrollY?: SharedValue<number>;
   } & Pick<ScrollViewProps, "keyboardShouldPersistTaps" | "onScrollBeginDrag">
 >(function Screen(
@@ -179,6 +176,7 @@ export const Screen = forwardRef<
     bleedTop,
     topBar,
     right,
+    left,
     scrollY: externalY,
     ...rest
   },
@@ -241,7 +239,9 @@ export const Screen = forwardRef<
             {children}
           </Animated.ScrollView>
         </BlurTargetView>
-        {topBar ?? <TopBar back={back} title={title} scrollY={y} titleAt={titleAt ?? (large ? 44 : 160)} right={right} target={target} />}
+        {topBar ?? (
+          <TopBar back={back} left={left} title={title} scrollY={y} titleAt={titleAt ?? (large ? 44 : 160)} right={right} target={target} />
+        )}
       </BlurTargetContext.Provider>
     </View>
   );

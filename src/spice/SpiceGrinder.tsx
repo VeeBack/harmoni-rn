@@ -1,7 +1,29 @@
-import { BlurMask, Canvas, Group, ImageShader, LinearGradient, Points, RadialGradient, RoundedRect, Skia, useImage, vec, type SkPoint } from "@shopify/react-native-skia";
+import {
+  BlurMask,
+  Canvas,
+  Group,
+  ImageShader,
+  LinearGradient,
+  Points,
+  RadialGradient,
+  RoundedRect,
+  Skia,
+  useImage,
+  vec,
+  type SkPoint,
+} from "@shopify/react-native-skia";
 import { useEffect, useMemo } from "react";
 import { View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useDerivedValue, useFrameCallback, useSharedValue, withRepeat, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 
 import { Text } from "@/ui/Text";
 import { colors } from "@/ui/theme";
@@ -169,12 +191,23 @@ export function SpiceGrinder({ size, seed }: { size: number; seed: string }) {
         </RoundedRect>
         {/* A low glow where the glitter lies. */}
         <RoundedRect x={0} y={0} width={size} height={size} r={r} opacity={0.5}>
-          <RadialGradient c={vec(size / 2, size * 0.95)} r={size * 0.7} colors={[`hsla(${A}, 70%, 45%, 0.55)`, `hsla(${A}, 70%, 45%, 0)`]} />
+          <RadialGradient
+            c={vec(size / 2, size * 0.95)}
+            r={size * 0.7}
+            colors={[`hsla(${A}, 70%, 45%, 0.55)`, `hsla(${A}, 70%, 45%, 0)`]}
+          />
         </RoundedRect>
 
         {[0, 1, 2].map((tone) =>
           [0, 1, 2].map((level) => (
-            <Layer key={`${tone}${level}`} layers={layers} k={tone * 3 + level} color={tones[tone]} width={fine * (tone === 2 ? 0.8 : 1)} opacity={[0.28, 0.6, 1][level]} />
+            <Layer
+              key={`${tone}${level}`}
+              layers={layers}
+              k={tone * 3 + level}
+              color={tones[tone]}
+              width={fine * (tone === 2 ? 0.8 : 1)}
+              opacity={[0.28, 0.6, 1][level]}
+            />
           )),
         )}
 
@@ -201,13 +234,25 @@ export function SpiceGrinder({ size, seed }: { size: number; seed: string }) {
   );
 }
 
-function Layer({ layers, k, color, width, opacity }: { layers: SharedValue<SkPoint[][]>; k: number; color: string; width: number; opacity: number }) {
+function Layer({
+  layers,
+  k,
+  color,
+  width,
+  opacity,
+}: {
+  layers: SharedValue<SkPoint[][]>;
+  k: number;
+  color: string;
+  width: number;
+  opacity: number;
+}) {
   const points = useDerivedValue(() => layers.value[k] ?? []);
   return <Points points={points} mode="points" color={color} style="stroke" strokeWidth={width} strokeCap="round" opacity={opacity} />;
 }
 
 /** The grinder's words, for a Spice page that's still being made. */
-export function GrindingNote() {
+export function GrindingNote({ body = "Finding songs that go with the ones you picked." }: { body?: string }) {
   const o = useSharedValue(0.5);
   useEffect(() => {
     o.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }), -1, true);
@@ -221,7 +266,7 @@ export function GrindingNote() {
         </Text>
       </Animated.View>
       <Text variant="subhead" color={colors.text2} align="center">
-        Finding songs that go with the ones you picked.
+        {body}
       </Text>
     </View>
   );

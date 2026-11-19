@@ -79,18 +79,33 @@ export interface PlaylistItem {
   song: Song;
 }
 
+export type Visibility = "private" | "link" | "users" | "public";
+
 export interface Playlist {
   id: string;
   name: string;
   description?: string;
   updatedAt: string;
   items: PlaylistItem[];
+  /** Who made it (missing on older servers). */
+  owner?: UserCard;
+  /** false: someone else's, shared with you (open and play only). Missing on older servers: yours. */
+  owned?: boolean;
+  visibility?: Visibility;
+  /** Owner only, while visibility is "link": the path to send, with its key. */
+  shareUrl?: string;
+  /** Owner only: who it's shared with. */
+  sharedWith?: UserCard[];
 }
+
+export type SharedPlaylist = PlaylistSummary & { owner: UserCard };
 
 export interface SpiceCard {
   id: string;
   name: string;
   kind: "search" | "custom";
+  /** Daily Spice only: the part of the day ("Morning") and when it changes next. */
+  daily?: { part: string; endsAt: string };
   covers: string[];
   seedCount?: number;
   autoNamed?: boolean;
@@ -102,6 +117,16 @@ export interface Spice extends SpiceCard {
   songs: Song[];
   seeds: Song[];
   generatedAt?: string;
+  /** When opening it next makes a new mix. */
+  expiresAt?: string;
+  daily?: {
+    part: string;
+    endsAt: string;
+    /** The search Spice mixed in right now. */
+    source?: { id: string; name: string };
+    /** Super Processing is off, so it's empty. */
+    needsSuperProcessing?: boolean;
+  };
 }
 
 export interface LyricWord {
@@ -148,12 +173,52 @@ export interface Me {
   superProcessing: boolean;
   autoplay: boolean;
   app?: { id: string; name: string };
+  /** Their profile picture (a public path on the server). */
+  avatarUrl?: string;
+  /** Their profile colour, "#a59bff". */
+  accent?: string;
+  /** Song ids on display on their profile, in order. */
+  pinned?: string[];
   server: {
     name: string;
     features: { superProcessing: boolean; autoplay: boolean; link: boolean; lyrics: boolean };
     canInvite: boolean;
     inviteDays: number;
   };
+}
+
+// --- People and profiles ---
+
+export interface UserCard {
+  id: string;
+  username: string;
+  name: string;
+  avatarUrl?: string;
+  accent: string;
+  /** Missing when it's you. */
+  youFollow?: boolean;
+  followsYou?: boolean;
+}
+
+export type ProfileFont = "default" | "serif" | "elegant" | "grotesk" | "display" | "rounded" | "mono" | "condensed" | "script" | "pixel";
+export type ProfileBanner = "glow" | "aurora" | "sunset" | "tide" | "stripes" | "dots" | "grid" | "plain" | "image";
+
+export interface Profile {
+  user: UserCard;
+  isMe: boolean;
+  bio?: string;
+  accent: string;
+  font: ProfileFont;
+  banner: ProfileBanner;
+  bannerUrl?: string;
+  followers: number;
+  following: number;
+  pinned: Song[];
+  likes?: { count: number; songs: Song[] };
+  playlists?: PlaylistSummary[];
+  showLikes: boolean;
+  showPlaylists: boolean;
+  joinedAt: string;
 }
 
 export interface ServerSetup {

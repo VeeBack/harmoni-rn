@@ -4,7 +4,19 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
 import { BackHandler, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, FadeIn, interpolate, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  interpolate,
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 import { sheetProgress } from "@/shell/sheet";
 import { miniArtFrame } from "@/shell/Dock";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,17 +38,16 @@ import { Icon, type IconName } from "@/ui/Icon";
 import { toast } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
-import { colors, layout, spring } from "@/ui/theme";
+import { spring } from "@/ui/theme";
 import { FadeMask } from "@/ui/FadeMask";
 import { Backdrop } from "./Backdrop";
+import { useBass } from "./bass";
 import { openLinkPicker } from "./LinkPicker";
 import { PlainLyrics, SyncedLyrics } from "./Lyrics";
 import { QueueView } from "./Queue";
 import { Controls, Progress } from "./Transport";
 
 const W = (a: number) => `rgba(255,255,255,${a})`;
-const OPEN = Easing.bezier(0.2, 0.9, 0.25, 1);
-const CLOSE = Easing.bezier(0.4, 0, 1, 1);
 
 export function NowPlaying() {
   const open = useNowPlaying((s) => s.open);
@@ -113,11 +124,17 @@ export function NowPlaying() {
   );
 }
 
+const PANEL = { duration: 620, dampingRatio: 0.86 };
+
+/** Where the small artwork sits beside the title in the lyrics and queue views (window coordinates, sheet open). */
+type Frame = { x: SharedValue<number>; y: SharedValue<number>; s: SharedValue<number> };
+
 function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: QueueSong }) {
   const insets = useSafeAreaInsets();
   const view = useNowPlaying((s) => s.view);
   const theme = useArtworkColors(song.artworkUrl);
   const lyricsOn = useSession((s) => s.me?.server.features.lyrics ?? true);
+  useBass();
   const lyricsQ = useQuery({
     queryKey: ["lyrics", song.id],
     queryFn: () => Api.lyrics(song.id),
@@ -130,6 +147,18 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
   const shown: NowPlayingView = view === "lyrics" ? (lyricsQ.isLoading || hasWords ? "lyrics" : "art") : view;
   const linkConnected = useLink((l) => l.enabled && l.connected);
   const playing = usePlayback().playing;
+
+  // 0: the artwork view; 1: lyrics or queue. The artwork glides between the two.
+  const panel = useSharedValue(shown === "art" ? 0 : 1);
+  // What the panel shows; kept while it fades out so it doesn't vanish mid-glide.
+  const [content, setContent] = useState<"lyrics" | "queue" | null>(shown === "art" ? null : shown);
+  useEffect(() => {
+    if (shown !== "art") setContent(shown);
+    panel.value = withSpring(shown === "art" ? 0 : 1, PANEL, (done) => {
+      if (done && shown === "art") runOnJS(setContent)(null);
+    });
+  }, [shown, panel]);
+  const compact: Frame = { x: useSharedValue(0), y: useSharedValue(0), s: useSharedValue(0) };
 
   // Idle: in the lyrics view, 3 s without a touch while playing fades the chrome away.
   const [idle, setIdle] = useState(false);
@@ -152,64 +181,137 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
     chrome.value = withTiming(isIdle ? 0 : 1, { duration: 600, easing: Easing.bezier(0.2, 0.7, 0.2, 1) });
   }, [isIdle, chrome]);
   const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.value }));
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(panel.value, [0.3, 1], [0, 1], "clamp"),
+    transform: [{ translateY: (1 - panel.value) * 36 }, { scale: 0.97 + 0.03 * panel.value }],
+  }));
 
   return (
     <View onTouchStart={wake} style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, overflow: "hidden" }}>
       <Backdrop art={song.artworkUrl} theme={theme} />
       <GestureDetector gesture={pan}>
         <View>
-          <Press onPress={closeNowPlaying} feedback="tap" scaleTo={1} accessibilityLabel="Close" style={{ height: 30, alignItems: "center", justifyContent: "center" }}>
+          <Press
+            onPress={closeNowPlaying}
+            feedback="tap"
+            scaleTo={1}
+            accessibilityLabel="Close"
+            style={{ height: 30, alignItems: "center", justifyContent: "center" }}
+          >
             <View style={{ width: 38, height: 5, borderRadius: 3, backgroundColor: W(0.4) }} />
           </Press>
-          {shown !== "art" ? <CompactHeader song={song} /> : null}
         </View>
       </GestureDetector>
 
-      {shown === "art" ? (
-        <GestureDetector gesture={pan}>
-          <View style={{ flex: 1 }}>
-            <ArtStage song={song} quiet={lyrics && !hasWords ? (lyrics.instrumental ? "Instrumental" : "No lyrics for this one") : undefined} pan={pan} />
-          </View>
-        </GestureDetector>
-      ) : (
-        <View style={{ flex: 1 }}>
-          <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8 }}>
-            {shown === "queue" ? (
-              <FadeMask stops={[[0, 0], [0.03, 1], [0.86, 1], [1, 0]]}>
-                <QueueView />
-              </FadeMask>
-            ) : lyricsQ.isError ? (
-              <Text size={13} color={W(0.55)}>
-                Couldn't load lyrics right now.
-              </Text>
-            ) : lyrics && hasWords ? (
-              lyrics.sync === "line" || lyrics.sync === "word" ? (
-                <FadeMask stops={[[0, 0], [0.14, 0], [0.34, 1], [0.78, 1], [1, 0]]}>
-                  <SyncedLyrics key={song.id} lyrics={lyrics} durationMs={song.durationMs} />
-                </FadeMask>
-              ) : (
-                <FadeMask stops={[[0, 0], [0.12, 1], [0.8, 1], [1, 0]]}>
-                  <PlainLyrics lyrics={lyrics} />
-                </FadeMask>
-              )
-            ) : null}
-            {shown === "lyrics" && hasWords ? <KeepAwakeForLyrics /> : null}
-          </View>
+      <View style={{ flex: 1 }}>
+        {/* Lyrics and queue, under a header with the song. */}
+        <View style={StyleSheet.absoluteFill} pointerEvents={shown === "art" ? "none" : "box-none"}>
           <GestureDetector gesture={pan}>
-            <View style={{ paddingHorizontal: 28, paddingBottom: 8 }}>
-              <Progress sheetPan={pan} />
-              <Animated.View style={chromeStyle} pointerEvents={isIdle ? "none" : "auto"}>
-                <Controls />
+            <View>
+              <CompactHeader song={song} panel={panel} frame={compact} />
+            </View>
+          </GestureDetector>
+          <Animated.View style={[{ flex: 1 }, contentStyle]}>
+            {content === "queue" ? (
+              <Animated.View key="queue" entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)} style={StyleSheet.absoluteFill}>
+                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8 }}>
+                  <FadeMask
+                    stops={[
+                      [0, 0],
+                      [0.03, 1],
+                      [0.86, 1],
+                      [1, 0],
+                    ]}
+                  >
+                    <QueueView />
+                  </FadeMask>
+                </View>
               </Animated.View>
+            ) : content === "lyrics" ? (
+              <Animated.View key="lyrics" entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)} style={StyleSheet.absoluteFill}>
+                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 8 }}>
+                  {lyricsQ.isError ? (
+                    <Text size={13} color={W(0.55)}>
+                      Couldn't load lyrics right now.
+                    </Text>
+                  ) : lyrics && hasWords ? (
+                    lyrics.sync === "line" || lyrics.sync === "word" ? (
+                      <FadeMask
+                        stops={[
+                          [0, 0],
+                          [0.12, 0],
+                          [0.3, 1],
+                          [0.8, 1],
+                          [1, 0],
+                        ]}
+                      >
+                        <SyncedLyrics key={song.id} lyrics={lyrics} durationMs={song.durationMs} />
+                      </FadeMask>
+                    ) : (
+                      <FadeMask
+                        stops={[
+                          [0, 0],
+                          [0.12, 1],
+                          [0.8, 1],
+                          [1, 0],
+                        ]}
+                      >
+                        <PlainLyrics lyrics={lyrics} />
+                      </FadeMask>
+                    )
+                  ) : null}
+                  {hasWords ? <KeepAwakeForLyrics /> : null}
+                </View>
+              </Animated.View>
+            ) : null}
+          </Animated.View>
+        </View>
+
+        {/* The artwork, its title and buttons. In the other views only the artwork stays, small, by the title. */}
+        <View style={StyleSheet.absoluteFill} pointerEvents={shown === "art" ? "box-none" : "none"}>
+          <GestureDetector gesture={pan}>
+            <View style={{ flex: 1 }}>
+              <ArtStage
+                song={song}
+                panel={panel}
+                compact={compact}
+                quiet={lyrics && !hasWords ? (lyrics.instrumental ? "Instrumental" : "No lyrics for this one") : undefined}
+              />
             </View>
           </GestureDetector>
         </View>
-      )}
+      </View>
 
-      <Animated.View style={[{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 34, paddingTop: 4, paddingBottom: 10 }, chromeStyle]} pointerEvents={isIdle ? "none" : "auto"}>
-        <ViewButton icon="lyrics" label="Lyrics" on={shown === "lyrics"} onPress={() => openNowPlaying(view === "lyrics" ? "art" : "lyrics")} disabled={!lyricsOn} />
+      <GestureDetector gesture={pan}>
+        <View style={{ paddingHorizontal: 28 }}>
+          <Progress sheetPan={pan} />
+          <Animated.View style={chromeStyle} pointerEvents={isIdle ? "none" : "auto"}>
+            <Controls />
+          </Animated.View>
+        </View>
+      </GestureDetector>
+
+      <Animated.View
+        style={[
+          { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 34, paddingTop: 4, paddingBottom: 10 },
+          chromeStyle,
+        ]}
+        pointerEvents={isIdle ? "none" : "auto"}
+      >
+        <ViewButton
+          icon="lyrics"
+          label="Lyrics"
+          on={shown === "lyrics"}
+          onPress={() => openNowPlaying(view === "lyrics" ? "art" : "lyrics")}
+          disabled={!lyricsOn}
+        />
         {linkConnected ? <LinkButton /> : null}
-        <ViewButton icon="queue" label="Up next" on={shown === "queue"} onPress={() => openNowPlaying(view === "queue" ? "art" : "queue")} />
+        <ViewButton
+          icon="queue"
+          label="Up next"
+          on={shown === "queue"}
+          onPress={() => openNowPlaying(view === "queue" ? "art" : "queue")}
+        />
       </Animated.View>
     </View>
   );
@@ -224,7 +326,26 @@ function KeepAwake() {
   return null;
 }
 
-function ViewButton({ icon, label, on, onPress, disabled, accent }: { icon: IconName; label: string; on?: boolean; onPress: () => void; disabled?: boolean; accent?: boolean }) {
+function ViewButton({
+  icon,
+  label,
+  on,
+  onPress,
+  disabled,
+  accent,
+}: {
+  icon: IconName;
+  label: string;
+  on?: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+}) {
+  const lit = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    lit.value = withSpring(on ? 1 : 0, spring.snappy);
+  }, [on, lit]);
+  const pill = useAnimatedStyle(() => ({ opacity: lit.value, transform: [{ scale: 0.6 + 0.4 * lit.value }] }));
   return (
     <Press
       onPress={onPress}
@@ -233,8 +354,10 @@ function ViewButton({ icon, label, on, onPress, disabled, accent }: { icon: Icon
       scaleTo={0.88}
       accessibilityLabel={label}
       accessibilityState={{ selected: on }}
-      style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: on ? W(0.2) : accent ? "rgba(239,230,214,0.14)" : "transparent", opacity: disabled ? 0.35 : 1 }}
+      style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1 }}
     >
+      <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 22, backgroundColor: W(0.2) }, pill]} />
+      {accent ? <View style={[StyleSheet.absoluteFill, { borderRadius: 22, backgroundColor: "rgba(239,230,214,0.14)" }]} /> : null}
       <Icon name={icon} size={22} color={accent ? "#efe6d6" : on ? "#fff" : W(0.85)} />
     </Press>
   );
@@ -242,18 +365,37 @@ function ViewButton({ icon, label, on, onPress, disabled, accent }: { icon: Icon
 
 function LinkButton() {
   const playingOn = usePlayingOn();
-  return <ViewButton icon="link" label={playingOn ? `Playing on ${playingOn}. Harmoni Link` : "Harmoni Link"} accent={!!playingOn} onPress={openLinkPicker} />;
+  return (
+    <ViewButton
+      icon="link"
+      label={playingOn ? `Playing on ${playingOn}. Harmoni Link` : "Harmoni Link"}
+      accent={!!playingOn}
+      onPress={openLinkPicker}
+    />
+  );
 }
 
 function LikeButton({ song }: { song: QueueSong }) {
   const liked = useIsLiked(song.id);
   return (
     <Press
-      onPress={() => useLibrary.getState().toggleLike(song).catch(() => toast("Couldn't save that. Try again?", "error"))}
+      onPress={() =>
+        useLibrary
+          .getState()
+          .toggleLike(song)
+          .catch(() => toast("Couldn't save that. Try again?", "error"))
+      }
       feedback={liked ? "toggleOff" : "confirm"}
       scaleTo={0.85}
       accessibilityLabel={liked ? "Remove from Liked" : "Add to Liked"}
-      style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: liked ? W(0.2) : "transparent" }}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: liked ? W(0.2) : "transparent",
+      }}
     >
       <Icon name={liked ? "heart-solid" : "heart"} size={22} color={liked ? "#fff" : W(0.85)} />
     </Press>
@@ -273,23 +415,38 @@ function PlayingOn() {
   );
 }
 
-function CompactHeader({ song }: { song: QueueSong }) {
+function CompactHeader({ song, panel, frame }: { song: QueueSong; panel: SharedValue<number>; frame: Frame }) {
+  const { height } = useWindowDimensions();
+  const ref = useRef<ComponentRef<typeof View>>(null);
+  // The artwork itself is the big one, flown here (ArtStage); this only holds its place.
+  const measure = () =>
+    ref.current?.measureInWindow((x: number, y: number, w: number) => {
+      frame.x.value = x;
+      frame.y.value = y - (1 - sheetProgress.value) * height;
+      frame.s.value = w;
+    });
+  const textStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(panel.value, [0.45, 1], [0, 1], "clamp"),
+    transform: [{ translateX: (1 - panel.value) * -16 }],
+  }));
   return (
-    <Animated.View entering={FadeIn.duration(360)} style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 }}>
-      <Press onPress={() => openNowPlaying("art")} feedback="tap" scaleTo={0.95} style={{ elevation: 8, shadowColor: "#000", borderRadius: 8 }}>
-        <Artwork url={song.artworkUrl} size={56} radius={8} />
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 24, paddingTop: 10, paddingBottom: 4 }}>
+      <Press onPress={() => openNowPlaying("art")} feedback="tap" scaleTo={1} accessibilityLabel="Show artwork">
+        <View ref={ref} collapsable={false} onLayout={measure} style={{ width: 56, height: 56 }} />
       </Press>
-      <View style={{ flex: 1 }}>
-        <Text size={17} weight={600} color="#fff" numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text color={W(0.68)} numberOfLines={1}>
-          {song.artists.map((a) => a.name).join(", ")}
-        </Text>
-        <PlayingOn />
-      </View>
-      <LikeButton song={song} />
-    </Animated.View>
+      <Animated.View style={[{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }, textStyle]}>
+        <View style={{ flex: 1 }}>
+          <Text size={17} weight={600} color="#fff" numberOfLines={1}>
+            {song.title}
+          </Text>
+          <Text color={W(0.68)} numberOfLines={1}>
+            {song.artists.map((a) => a.name).join(", ")}
+          </Text>
+          <PlayingOn />
+        </View>
+        <LikeButton song={song} />
+      </Animated.View>
+    </View>
   );
 }
 
@@ -300,14 +457,20 @@ function sleepItem(): Extra {
     icon: "timer",
     detail: sleepLabel(s),
     submenu: () => [
-      ...[15, 30, 45, 60, 90].map((m) => ({ label: `${m} minutes`, checked: false, onPress: () => (setSleep(m), toast(`Music stops in ${m} minutes`)) })),
+      ...[15, 30, 45, 60, 90].map((m) => ({
+        label: `${m} minutes`,
+        checked: false,
+        onPress: () => (setSleep(m), toast(`Music stops in ${m} minutes`)),
+      })),
       { label: "End of this song", checked: s.endOfSong, onPress: () => (setSleep("song"), toast("Music stops after this song")) },
-      ...(s.until || s.endOfSong ? (["divider", { label: "Turn off", icon: "close" as const, onPress: () => (setSleep(null), toast("Sleep timer off")) }] as const) : []),
+      ...(s.until || s.endOfSong
+        ? (["divider", { label: "Turn off", icon: "close" as const, onPress: () => (setSleep(null), toast("Sleep timer off")) }] as const)
+        : []),
     ],
   };
 }
 
-function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: ReturnType<typeof Gesture.Pan> }) {
+function ArtStage({ song, quiet, panel, compact }: { song: QueueSong; quiet?: string; panel: SharedValue<number>; compact: Frame }) {
   const { width, height } = useWindowDimensions();
   const pb = usePlayback();
   const art = Math.min(width - 56, height * 0.44, 520);
@@ -317,7 +480,8 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
     scale.value = withSpring(pb.playing ? 1 : 0.86, pb.playing ? spring.bouncy : spring.smooth);
   }, [pb.playing, scale]);
 
-  // The artwork grows out of the mini player's as the sheet rises, and shrinks back into it.
+  // The artwork grows out of the mini player's as the sheet rises, and shrinks back into it;
+  // in the lyrics and queue views it flies to the small spot by the title.
   const ref = useRef<ComponentRef<typeof View>>(null);
   const fx = useSharedValue(-1);
   const fy = useSharedValue(0);
@@ -334,23 +498,44 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
   const mini = { x: miniArtFrame.x, y: miniArtFrame.y, s: miniArtFrame.size };
   const artStyle = useAnimatedStyle(() => {
     const p = sheetProgress.value;
-    // Scaled about the top-left (for the morph), so a paused artwork is moved back to the centre.
-    if (fx.value < 0 || mini.s <= 0 || p >= 1) {
-      const c = ((1 - scale.value) * art) / 2;
-      return { transform: [{ translateX: c }, { translateY: c }, { scale: scale.value }] };
+    const t = compact.s.value > 0 ? panel.value : 0;
+    if (fx.value < 0) {
+      const c0 = ((1 - scale.value) * art) / 2;
+      return { transform: [{ translateX: c0 }, { translateY: c0 }, { scale: scale.value }] };
     }
+    // Where it belongs with the sheet open: big, small by the title, or on the way.
+    const tx = fx.value + (compact.x.value - fx.value) * t;
+    const ty = fy.value + (compact.y.value - fy.value) * t;
+    const ts = fs.value + (compact.s.value - fs.value) * t;
+    const morph = mini.s > 0 && p < 1;
+    const dx = morph ? mini.x + (tx - mini.x) * p : tx;
+    const dy = morph ? mini.y + (ty - mini.y) * p : ty;
+    const ds = morph ? mini.s + (ts - mini.s) * p : ts;
     const off = (1 - p) * height;
-    const dx = mini.x + (fx.value - mini.x) * p;
-    const dy = mini.y + (fy.value - mini.y) * p;
-    const ds = mini.s + (fs.value - mini.s) * p;
     const k = ds / fs.value;
-    const sEff = scale.value + (1 - scale.value) * (1 - p);
+    // Scaled about the top-left (for the morph), so a paused artwork is moved back to the centre.
+    const sEff = 1 - (1 - scale.value) * (1 - t) * (morph ? p : 1);
     const c = ((1 - sEff) * ds) / 2;
     return {
       transform: [{ translateX: dx - fx.value + c }, { translateY: dy - (fy.value + off) + c }, { scale: k * sEff }],
     };
   });
-  const artRadius = useAnimatedStyle(() => ({ borderRadius: interpolate(sheetProgress.value, [0, 1], [8 * (fs.value / Math.max(1, mini.s)), 12], "clamp") }));
+  const artRadius = useAnimatedStyle(() => {
+    const p = sheetProgress.value;
+    const t = compact.s.value > 0 ? panel.value : 0;
+    const morph = mini.s > 0 && p < 1;
+    const target = 12 + (8 - 12) * t;
+    const shown = morph ? 8 + (target - 8) * p : target;
+    const tsz = fs.value + (compact.s.value - fs.value) * t;
+    const ds = morph ? mini.s + (tsz - mini.s) * p : tsz;
+    const sEff = 1 - (1 - scale.value) * (1 - t) * (morph ? p : 1);
+    return { borderRadius: shown / Math.max(0.01, (ds / Math.max(1, fs.value)) * sEff) };
+  });
+  // The title and buttons make way for the lyrics and queue.
+  const infoStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(panel.value, [0, 0.4], [1, 0], "clamp"),
+    transform: [{ translateY: panel.value * 18 }],
+  }));
 
   const featuredAt = song.artists.findIndex((a) => a.role === "featured");
   const go = (href: string) => {
@@ -359,9 +544,14 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
   };
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: 28, paddingBottom: height * 0.02, alignItems: "center" }}>
+    <View style={{ flex: 1, paddingHorizontal: 28, paddingBottom: 6, alignItems: "center" }}>
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <Animated.View ref={ref} collapsable={false} onLayout={measure} style={[{ elevation: 28, shadowColor: "#000", borderRadius: 12, transformOrigin: "0% 0%" }, artStyle]}>
+        <Animated.View
+          ref={ref}
+          collapsable={false}
+          onLayout={measure}
+          style={[{ elevation: 28, shadowColor: "#000", borderRadius: 12, transformOrigin: "0% 0%" }, artStyle]}
+        >
           <Press onLongPress={() => openSongMenu(song, [], { fromNowPlaying: true })} feedback={false} scaleTo={1}>
             <Animated.View style={[{ overflow: "hidden" }, artRadius]}>
               <Artwork url={song.artworkUrl} size={art} radius={0} px={900} priority="high" />
@@ -369,7 +559,7 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
           </Press>
         </Animated.View>
       </View>
-      <View style={{ width: "100%", flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <Animated.View style={[{ width: "100%", flexDirection: "row", alignItems: "center", gap: 12 }, infoStyle]}>
         <View style={{ flex: 1 }}>
           <Text variant="title3" color="#fff" numberOfLines={1}>
             {song.title}
@@ -395,15 +585,17 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
             </Text>
           ) : null}
         </View>
-        <Press onPress={() => openSongMenu(song, [sleepItem()], { fromNowPlaying: true })} feedback="contextClick" scaleTo={0.85} accessibilityLabel={`More options for ${song.title}`} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+        <Press
+          onPress={() => openSongMenu(song, [sleepItem()], { fromNowPlaying: true })}
+          feedback="contextClick"
+          scaleTo={0.85}
+          accessibilityLabel={`More options for ${song.title}`}
+          style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+        >
           <Icon name="more" size={22} color={W(0.85)} />
         </Press>
         <LikeButton song={song} />
-      </View>
-      <View style={{ width: "100%" }}>
-        <Progress sheetPan={pan} />
-        <Controls />
-      </View>
+      </Animated.View>
     </View>
   );
 }

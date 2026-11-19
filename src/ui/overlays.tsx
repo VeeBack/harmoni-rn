@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
@@ -55,7 +64,10 @@ const hudOut = () => {
     initialValues: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
     animations: {
       opacity: withTiming(0, { duration: 180 }),
-      transform: [{ translateY: withTiming(-24, { duration: 220, easing: Easing.in(Easing.quad) }) }, { scale: withTiming(0.92, { duration: 220 }) }],
+      transform: [
+        { translateY: withTiming(-24, { duration: 220, easing: Easing.in(Easing.quad) }) },
+        { scale: withTiming(0.92, { duration: 220 }) },
+      ],
     },
   };
 };
@@ -95,8 +107,17 @@ interface DialogSpec {
 
 const useDialog = create<{ dialog: DialogSpec | null }>(() => ({ dialog: null }));
 
-export function prompt(opts: { title: string; note?: string; label?: string; defaultValue?: string; placeholder?: string; confirm?: string }): Promise<string | undefined> {
-  return new Promise((resolve) => useDialog.setState({ dialog: { ...opts, field: true, resolve: (v) => resolve(typeof v === "string" ? v : undefined) } }));
+export function prompt(opts: {
+  title: string;
+  note?: string;
+  label?: string;
+  defaultValue?: string;
+  placeholder?: string;
+  confirm?: string;
+}): Promise<string | undefined> {
+  return new Promise((resolve) =>
+    useDialog.setState({ dialog: { ...opts, field: true, resolve: (v) => resolve(typeof v === "string" ? v : undefined) } }),
+  );
 }
 
 export function confirm(opts: { title: string; note?: string; confirm?: string; danger?: boolean }): Promise<boolean> {
@@ -146,7 +167,12 @@ function DialogHost() {
   const disabled = !!dialog?.field && !trimmed;
   return dialog ? (
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(180)} style={[StyleSheet.absoluteFill, styles.scrim]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => close(dialog.field ? undefined : false)} accessible={false} importantForAccessibility="no" />
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={() => close(dialog.field ? undefined : false)}
+        accessible={false}
+        importantForAccessibility="no"
+      />
       <Animated.View entering={alertIn} exiting={alertOut} style={[styles.alert, { width: Math.min(340, width - 48) }]}>
         <View style={{ gap: 6 }}>
           <Text variant="headline">{dialog.title}</Text>
@@ -180,7 +206,12 @@ function DialogHost() {
           </View>
         ) : null}
         <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-          <Press onPress={() => close(dialog.field ? undefined : false)} feedback="tap" scaleTo={0.96} style={[styles.alertButton, { backgroundColor: "rgba(255,255,255,0.09)" }]}>
+          <Press
+            onPress={() => close(dialog.field ? undefined : false)}
+            feedback="tap"
+            scaleTo={0.96}
+            style={[styles.alertButton, { backgroundColor: "rgba(255,255,255,0.09)" }]}
+          >
             <Text variant="callout" weight={600}>
               Cancel
             </Text>
@@ -190,7 +221,10 @@ function DialogHost() {
             feedback="confirm"
             scaleTo={0.96}
             onPress={() => close(dialog.field ? trimmed : true)}
-            style={[styles.alertButton, { backgroundColor: dialog.danger ? "rgba(255,107,94,0.16)" : colors.accent, opacity: disabled ? 0.45 : 1 }]}
+            style={[
+              styles.alertButton,
+              { backgroundColor: dialog.danger ? "rgba(255,107,94,0.16)" : colors.accent, opacity: disabled ? 0.45 : 1 },
+            ]}
           >
             <Text variant="callout" weight={600} color={dialog.danger ? colors.danger : colors.accentInk}>
               {dialog.confirm ?? (dialog.field ? "Save" : "OK")}
@@ -345,7 +379,11 @@ function MenuHost() {
             <ScrollView bounces={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
               <Animated.View key={stack.length} entering={FadeIn.duration(200)}>
                 {top ? (
-                  <Pressable onPress={() => setStack((s) => s.slice(0, -1))} style={({ pressed }) => [styles.subhead, pressed && styles.pressed]} accessibilityLabel={`Back from ${top.title}`}>
+                  <Pressable
+                    onPress={() => setStack((s) => s.slice(0, -1))}
+                    style={({ pressed }) => [styles.subhead, pressed && styles.pressed]}
+                    accessibilityLabel={`Back from ${top.title}`}
+                  >
                     <Icon name="chevron-left" size={20} color={colors.tint} />
                     <Text variant="headline" numberOfLines={1} style={{ flex: 1 }}>
                       {top.title}
@@ -353,7 +391,12 @@ function MenuHost() {
                   </Pressable>
                 ) : shown.preview ? (
                   <View style={styles.preview}>
-                    <Artwork url={shown.preview.artwork ?? undefined} size={48} radius={shown.preview.round ? 24 : 8} round={shown.preview.round} />
+                    <Artwork
+                      url={shown.preview.artwork ?? undefined}
+                      size={48}
+                      radius={shown.preview.round ? 24 : 8}
+                      round={shown.preview.round}
+                    />
                     <View style={{ flex: 1, gap: 1 }}>
                       <Text variant="headline" numberOfLines={1}>
                         {shown.preview.title}
@@ -373,7 +416,13 @@ function MenuHost() {
                   return (
                     <View key={gi} style={gi > 0 || top || shown.preview || shown.header ? styles.groupGap : null}>
                       {g.map((item, i) => (
-                        <MenuRow key={`${item.label}${i}`} item={item} checks={checks} last={i === g.length - 1} onPress={() => choose(item)} />
+                        <MenuRow
+                          key={`${item.label}${i}`}
+                          item={item}
+                          checks={checks}
+                          last={i === g.length - 1}
+                          onPress={() => choose(item)}
+                        />
                       ))}
                     </View>
                   );
@@ -381,7 +430,11 @@ function MenuHost() {
               </Animated.View>
             </ScrollView>
           </View>
-          <Pressable onPress={closeMenu} style={({ pressed }) => [styles.cancel, pressed && { backgroundColor: "rgba(52,50,48,1)" }]} accessibilityLabel="Cancel">
+          <Pressable
+            onPress={closeMenu}
+            style={({ pressed }) => [styles.cancel, pressed && { backgroundColor: "rgba(52,50,48,1)" }]}
+            accessibilityLabel="Cancel"
+          >
             <Text variant="headline" color={colors.tint}>
               Cancel
             </Text>
@@ -392,7 +445,17 @@ function MenuHost() {
   );
 }
 
-function MenuRow({ item, checks, last, onPress }: { item: Exclude<MenuItem, "divider">; checks: boolean; last: boolean; onPress: () => void }) {
+function MenuRow({
+  item,
+  checks,
+  last,
+  onPress,
+}: {
+  item: Exclude<MenuItem, "divider">;
+  checks: boolean;
+  last: boolean;
+  onPress: () => void;
+}) {
   const color = item.danger ? colors.danger : colors.text;
   return (
     <Pressable
@@ -424,10 +487,134 @@ function MenuRow({ item, checks, last, onPress }: { item: Exclude<MenuItem, "div
 }
 
 /** Mount once at the root, above everything. */
+// ---------- Sheets: a card of anything from the bottom (share settings…) ----------
+
+interface SheetSpec {
+  title: string;
+  render: () => ReactNode;
+}
+
+const useSheet = create<{ sheet: SheetSpec | null }>(() => ({ sheet: null }));
+
+export function openSheet(spec: SheetSpec) {
+  haptic.contextClick();
+  useSheet.setState({ sheet: spec });
+}
+
+export function closeSheet() {
+  Keyboard.dismiss();
+  useSheet.setState({ sheet: null });
+}
+
+function SheetHost() {
+  const { sheet } = useSheet();
+  const [shown, setShown] = useState<SheetSpec | null>(null);
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const y = useSharedValue(height);
+  const backdrop = useSharedValue(0);
+
+  useEffect(() => {
+    if (sheet) {
+      setShown(sheet);
+      y.value = height;
+      backdrop.value = withTiming(1, { duration: 260 });
+      y.value = withSpring(0, { duration: 520, dampingRatio: 0.9 });
+    } else if (shown) {
+      backdrop.value = withTiming(0, { duration: 220 });
+      y.value = withTiming(height, { duration: 260, easing: Easing.in(Easing.cubic) }, (done) => {
+        if (done) runOnJS(setShown)(null);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet]);
+
+  useEffect(() => {
+    if (!sheet) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      closeSheet();
+      return true;
+    });
+    return () => sub.remove();
+  }, [sheet]);
+
+  // Dragged down by its top (the content may scroll).
+  const pan = Gesture.Pan()
+    .activeOffsetY(6)
+    .onUpdate((e) => {
+      y.value = e.translationY > 0 ? e.translationY : -Math.sqrt(-e.translationY) * 2;
+    })
+    .onEnd((e) => {
+      if (e.translationY > 100 || e.velocityY > 800) runOnJS(closeSheet)();
+      else y.value = withSpring(0, { duration: 420, dampingRatio: 0.85, velocity: e.velocityY });
+    });
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
+  if (!shown) return null;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? "auto" : "none"}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.5)" }, backdropStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} accessible={false} importantForAccessibility="no" />
+      </Animated.View>
+      <Animated.View
+        accessibilityLabel={shown.title}
+        style={[
+          styles.sheet,
+          {
+            position: "absolute",
+            left: 8,
+            right: 8,
+            bottom: 8 + insets.bottom,
+            maxHeight: height - insets.top - insets.bottom - 40,
+            borderRadius: 30,
+          },
+          sheetStyle,
+        ]}
+      >
+        <GestureDetector gesture={pan}>
+          <View style={{ paddingTop: 8, paddingBottom: 6 }}>
+            <View style={{ alignSelf: "center", width: 36, height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.22)" }} />
+            <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 20, paddingRight: 10, paddingTop: 8 }}>
+              <Text variant="headline" numberOfLines={1} style={{ flex: 1 }}>
+                {shown.title}
+              </Text>
+              <Press
+                onPress={closeSheet}
+                feedback="tap"
+                scaleTo={0.9}
+                accessibilityRole="button"
+                accessibilityLabel="Done"
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="close" size={16} color={colors.text2} />
+              </Press>
+            </View>
+          </View>
+        </GestureDetector>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 18 }}
+        >
+          {shown.render()}
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
 export function OverlayHost() {
   return (
     <>
       <MenuHost />
+      <SheetHost />
       <DialogHost />
       <ToastHost />
     </>
@@ -446,11 +633,36 @@ const styles = StyleSheet.create({
   },
   hudInner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, minHeight: 46 },
   scrim: { backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
-  alert: { backgroundColor: SHEET, borderRadius: 30, padding: 22, paddingTop: 24, gap: 16, elevation: 24, borderWidth: HAIR, borderColor: "rgba(255,255,255,0.08)" },
-  field: { height: 46, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", color: colors.text, fontFamily: fonts[400], fontSize: 17 },
+  alert: {
+    backgroundColor: SHEET,
+    borderRadius: 30,
+    padding: 22,
+    paddingTop: 24,
+    gap: 16,
+    elevation: 24,
+    borderWidth: HAIR,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  field: {
+    height: 46,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    color: colors.text,
+    fontFamily: fonts[400],
+    fontSize: 17,
+  },
   alertButton: { flex: 1, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   sheet: { backgroundColor: SHEET, borderRadius: 24, overflow: "hidden", borderWidth: HAIR, borderColor: "rgba(255,255,255,0.07)" },
-  cancel: { height: 56, borderRadius: 18, backgroundColor: SHEET, alignItems: "center", justifyContent: "center", borderWidth: HAIR, borderColor: "rgba(255,255,255,0.07)" },
+  cancel: {
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: SHEET,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: HAIR,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
   preview: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   header: { paddingHorizontal: 20, paddingVertical: 16 },
   subhead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, height: 52 },

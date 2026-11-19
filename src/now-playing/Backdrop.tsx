@@ -1,16 +1,35 @@
 import { Image } from "expo-image";
 import { memo, useEffect, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, interpolateColor } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  interpolateColor,
+} from "react-native-reanimated";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import type { ArtworkColors } from "harmoni-player";
 import { sized } from "@/ui/Artwork";
+import { bass } from "./bass";
+
+/** The bass, shaped so kicks stand out and the hum underneath doesn't. */
+function kick(b: number) {
+  "worklet";
+  const k = Math.max(0, (b - 0.3) / 0.7);
+  return k * k * (3 - 2 * k);
+}
 
 /**
  * The living backdrop: the cover's colour, with three huge blurred copies of
  * the cover turning and drifting slowly, under a soft veil. New songs fade in
- * over the old one.
+ * over the old one. It moves with the music: on each kick the blobs swell,
+ * the veil lifts and a glow of the cover's colour rises from below.
  */
 export const Backdrop = memo(function Backdrop({ art, theme }: { art?: string; theme: ArtworkColors | null }) {
   const [layers, setLayers] = useState<{ key: string; art: string }[]>([]);
@@ -31,6 +50,11 @@ export const Backdrop = memo(function Backdrop({ art, theme }: { art?: string; t
   const baseStyle = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(base.value, [0, 1], [from.value, to.value]) }));
 
   const dark = theme?.light ? [0.32, 0.58] : [0.04, 0.32];
+  const veil = useAnimatedStyle(() => ({ opacity: 1 - 0.45 * kick(bass.value) }));
+  const glow = useAnimatedStyle(() => {
+    const k = kick(bass.value);
+    return { opacity: 0.85 * k, transform: [{ scaleY: 0.85 + 0.25 * k }] };
+  });
   return (
     <Animated.View style={[StyleSheet.absoluteFill, baseStyle]} pointerEvents="none">
       {layers.map((l) => (
@@ -38,15 +62,29 @@ export const Backdrop = memo(function Backdrop({ art, theme }: { art?: string; t
           <Blobs art={l.art} />
         </Animated.View>
       ))}
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-        <Defs>
-          <RadialGradient id="veil" cx="25%" cy="20%" rx="140%" ry="110%">
-            <Stop offset="0" stopColor="#000" stopOpacity={dark[0]} />
-            <Stop offset="1" stopColor="#000" stopOpacity={dark[1]} />
-          </RadialGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#veil)" />
-      </Svg>
+      <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: "50% 100%" }, glow]}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+          <Defs>
+            <RadialGradient id="glow" cx="50%" cy="100%" rx="90%" ry="55%">
+              <Stop offset="0" stopColor={theme?.color ?? "#ffffff"} stopOpacity={0.55} />
+              <Stop offset="0.6" stopColor={theme?.color ?? "#ffffff"} stopOpacity={0.12} />
+              <Stop offset="1" stopColor={theme?.color ?? "#ffffff"} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill="url(#glow)" />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, veil]}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+          <Defs>
+            <RadialGradient id="veil" cx="25%" cy="20%" rx="140%" ry="110%">
+              <Stop offset="0" stopColor="#000" stopOpacity={dark[0]} />
+              <Stop offset="1" stopColor="#000" stopOpacity={dark[1]} />
+            </RadialGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill="url(#veil)" />
+        </Svg>
+      </Animated.View>
     </Animated.View>
   );
 });
@@ -60,21 +98,30 @@ function Blobs({ art }: { art: string }) {
   useEffect(() => {
     t1.value = withRepeat(withTiming(1, { duration: 46000, easing: Easing.linear }), -1, false);
     t2.value = withRepeat(withTiming(1, { duration: 62000, easing: Easing.linear }), -1, false);
-    t3.value = withRepeat(withSequence(withTiming(1, { duration: 28000, easing: Easing.inOut(Easing.ease) }), withTiming(0, { duration: 28000, easing: Easing.inOut(Easing.ease) })), -1, false);
+    t3.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 28000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 28000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
   }, [t1, t2, t3]);
-  const turn = (t: number, reverse = false) => {
+  const turn = (t: number, reverse: boolean, swell: number) => {
     "worklet";
-    const scale = 1 + 0.12 * Math.sin(Math.PI * t);
+    const scale = (1 + 0.12 * Math.sin(Math.PI * t)) * (1 + swell);
     return [{ rotate: `${(reverse ? -360 : 360) * t}deg` }, { scale }];
   };
-  const s1 = useAnimatedStyle(() => ({ transform: turn(t1.value) }));
-  const s2 = useAnimatedStyle(() => ({ transform: turn(t2.value, true) }));
+  const s1 = useAnimatedStyle(() => ({ transform: turn(t1.value, false, 0.1 * kick(bass.value)) }));
+  const s2 = useAnimatedStyle(() => ({ transform: turn(t2.value, true, 0.07 * kick(bass.value)) }));
   const s3 = useAnimatedStyle(() => ({
     transform: [
       { translateX: (-6 + 14 * t3.value) * vmax },
       { translateY: (-4 + 10 * t3.value) * vmax },
       { rotate: `${-20 + 55 * t3.value}deg` },
+      { scale: 1 + 0.16 * kick(bass.value) },
     ],
+    opacity: 0.6 + 0.3 * kick(bass.value),
   }));
   const src = { uri: sized(art, 200) };
   // Android 12+ blurs the whole circle (soft edges); the image is also pre-blurred for older phones.
@@ -82,13 +129,48 @@ function Blobs({ art }: { art: string }) {
   const big = 80 * vmax;
   return (
     <View style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
-      <Animated.View style={[{ position: "absolute", width: big, height: big, top: -32 * vmax, left: -24 * vmax, borderRadius: big / 2, overflow: "hidden" }, blur, s1]}>
+      <Animated.View
+        style={[
+          { position: "absolute", width: big, height: big, top: -32 * vmax, left: -24 * vmax, borderRadius: big / 2, overflow: "hidden" },
+          blur,
+          s1,
+        ]}
+      >
         <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
       </Animated.View>
-      <Animated.View style={[{ position: "absolute", width: big, height: big, right: -30 * vmax, bottom: -38 * vmax, borderRadius: big / 2, overflow: "hidden", opacity: 0.9 }, blur, s2]}>
+      <Animated.View
+        style={[
+          {
+            position: "absolute",
+            width: big,
+            height: big,
+            right: -30 * vmax,
+            bottom: -38 * vmax,
+            borderRadius: big / 2,
+            overflow: "hidden",
+            opacity: 0.9,
+          },
+          blur,
+          s2,
+        ]}
+      >
         <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
       </Animated.View>
-      <Animated.View style={[{ position: "absolute", width: 56 * vmax, height: 56 * vmax, top: height * 0.12, left: width * 0.28, borderRadius: 28 * vmax, overflow: "hidden", opacity: 0.6 }, blur, s3]}>
+      <Animated.View
+        style={[
+          {
+            position: "absolute",
+            width: 56 * vmax,
+            height: 56 * vmax,
+            top: height * 0.12,
+            left: width * 0.28,
+            borderRadius: 28 * vmax,
+            overflow: "hidden",
+          },
+          blur,
+          s3,
+        ]}
+      >
         <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
       </Animated.View>
     </View>

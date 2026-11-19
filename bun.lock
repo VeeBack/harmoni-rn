@@ -5,7 +5,16 @@
     "": {
       "name": "harmoni",
       "dependencies": {
+        "@expo-google-fonts/bebas-neue": "^0.4.1",
+        "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
+        "@expo-google-fonts/caveat": "^0.4.2",
+        "@expo-google-fonts/fraunces": "^0.4.1",
+        "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+        "@expo-google-fonts/nunito": "^0.4.2",
         "@expo-google-fonts/outfit": "^0.4.3",
+        "@expo-google-fonts/playfair-display": "^0.4.2",
+        "@expo-google-fonts/silkscreen": "^0.4.2",
+        "@expo-google-fonts/space-grotesk": "^0.4.1",
         "@expo/ui": "~58.0.28",
         "@react-native-masked-view/masked-view": "0.3.2",
         "@shopify/flash-list": "2.3.2",
@@ -26,6 +35,7 @@
         "expo-glass-effect": "~58.0.5",
         "expo-haptics": "~58.0.8",
         "expo-image": "~58.0.18",
+        "expo-image-picker": "~58.0.10",
         "expo-keep-awake": "~58.0.4",
         "expo-linear-gradient": "~58.0.4",
         "expo-linking": "~58.0.17",
@@ -226,9 +236,27 @@
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.4.1", "", { "dependencies": { "@eslint/core": "^0.17.0", "levn": "^0.4.1" } }, "sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA=="],
 
+    "@expo-google-fonts/bebas-neue": ["@expo-google-fonts/bebas-neue@0.4.1", "", {}, "sha512-Ibnf0EQgMUj01tT/ws64RlsMQmOvDP+UDFW93bld0C/WwaOaCGWKgNnqxNkKxmL73y2kpT8EB4dkSNUOyAOEJA=="],
+
+    "@expo-google-fonts/bricolage-grotesque": ["@expo-google-fonts/bricolage-grotesque@0.4.1", "", {}, "sha512-uijLLg+thOrFgw+gXtYA3dQJTBqqqleabcNFpamaYXqUUcbFe0J18C+4nfL0CyGzSJUicxUBLY4Zv7jdHmTGMA=="],
+
+    "@expo-google-fonts/caveat": ["@expo-google-fonts/caveat@0.4.2", "", {}, "sha512-kCG35tRUX8Wi+u0Jh5ck3K1u7vZkdLnwRTuKMrEnlVmikvxQFXN1KjF5cL2vqRG7Hwm7648Zl8xe1BWAoIsPCA=="],
+
+    "@expo-google-fonts/fraunces": ["@expo-google-fonts/fraunces@0.4.1", "", {}, "sha512-gYc9P92ObyWvz1rWPOeWSvVKyBFIuA8hgOdhvo4DSiPBaWLbFA6v8uLIEIBwW+0oWTlXbBzjeBReHQI2H7UNjQ=="],
+
+    "@expo-google-fonts/jetbrains-mono": ["@expo-google-fonts/jetbrains-mono@0.4.1", "", {}, "sha512-CslACrtMOcRwoWXCO7OMEI+9w3fukWSoBtvNz46OqPoogEuuoY0tkDY1O8sFumk8t0pC6Cx0Xr95O0TOQhpkug=="],
+
     "@expo-google-fonts/material-symbols": ["@expo-google-fonts/material-symbols@0.4.54", "", {}, "sha512-BcwBgi5EX5sA3sCzwPFM9Cp2squg3ugfw+e3OKBvWkZs9bEDkO0QiTeX8AlezS032vyAryikwEOqeJXVs5hNgQ=="],
 
+    "@expo-google-fonts/nunito": ["@expo-google-fonts/nunito@0.4.2", "", {}, "sha512-1KCWphw/I2ugqfs9iRHUCkPTnomNgGPtF4AvqVquoEKxr0EL+mcLNLgeixsslbaSFevRR6/KJAE3sc8g0VaY0Q=="],
+
     "@expo-google-fonts/outfit": ["@expo-google-fonts/outfit@0.4.3", "", {}, "sha512-2uQmDVJencWLllxds6SG92E+SjxyZfvg7eZKZ5XLHggmm5AuUyQK7lzMAFOUzT6kheq2kJ7BAiubMdjKT32fJg=="],
+
+    "@expo-google-fonts/playfair-display": ["@expo-google-fonts/playfair-display@0.4.2", "", {}, "sha512-mWhBV59RUjSS3aYpytUb7UyHHTnXcHh7epAn7gq+M4XAEh5PuMKUrP8eiUfkJLb6UwHZCi7EhQpUzxHu5OL96w=="],
+
+    "@expo-google-fonts/silkscreen": ["@expo-google-fonts/silkscreen@0.4.2", "", {}, "sha512-3btwlD7Yreei/7IbXmUWW9h9fH7q/GJTNqF2g52fAYbyGqq/nNqnIegD6Wi5ewTnWrD8ZBF1sRim8UHaZFZhNQ=="],
+
+    "@expo-google-fonts/space-grotesk": ["@expo-google-fonts/space-grotesk@0.4.1", "", {}, "sha512-ZVQYw4Ok/pgcSJiufP8oRZE3AVxS9xtmKEUfsurbHkHNdMc/GA1gDXP9G4Cr7KL4KqSc0haexR2TuMigotCn4Q=="],
 
     "@expo/cli": ["@expo/cli@58.1.20", "", { "dependencies": { "2g": "^1.0.1", "@expo/code-signing-certificates": "^0.0.7", "@expo/config": "~58.0.12", "@expo/config-plugins": "~58.0.13", "@expo/devcert": "^1.2.2", "@expo/env": "~2.6.0", "@expo/image-utils": "^0.12.7", "@expo/inline-modules": "^0.2.10", "@expo/json-file": "^11.2.1", "@expo/log-box": "^58.0.15", "@expo/log-box-utils": "^58.0.2", "@expo/metro": "~58.0.0", "@expo/metro-config": "58.0.22", "@expo/metro-file-map": "^58.0.6", "@expo/osascript": "^2.8.1", "@expo/package-manager": "^1.14.2", "@expo/platforms": "^58.0.1", "@expo/plist": "^0.10.2", "@expo/prebuild-config": "^58.0.20", "@expo/require-utils": "^58.0.6", "@expo/router-server": "^58.0.22", "@expo/schema-utils": "^58.0.3", "@expo/spawn-async": "^1.8.0", "@expo/ws-tunnel": "^2.0.1", "@expo/xcpretty": "^4.4.6", "@react-native/asset-utils": "0.88.1", "@react-native/dev-middleware": "0.88.1", "@react-native/js-polyfills": "0.88.1", "accepts": "^1.3.8", "agent-cli-detector": "0.1.7", "arg": "^5.0.2", "bplist-creator": "0.1.0", "bplist-parser": "^0.3.1", "chalk": "^4.0.0", "ci-info": "^3.3.0", "compression": "^1.7.4", "connect": "^3.7.0", "dnssd-advertise": "^1.1.6", "expo-server": "^58.1.0", "fetch-nodeshim": "^0.4.10", "lan-network": "^0.2.1", "multitars": "^1.0.2", "node-forge": "^1.4.0", "npm-package-arg": "^11.0.0", "ora": "^3.4.0", "picomatch": "^4.0.4", "pretty-format": "^29.7.0", "progress": "^2.0.3", "prompts": "^2.3.2", "resolve-from": "^5.0.0", "sandbox-cli-detector": "^0.2.0", "semver": "^7.7.4", "send": "^0.19.0", "slugify": "^1.3.4", "stacktrace-parser": "^0.1.10", "structured-headers": "^0.4.1", "terminal-link": "^2.1.1", "tinyglobby": "^0.2.15", "toqr": "^0.1.1", "wrap-ansi": "^7.0.0", "ws": "^8.12.1" }, "peerDependencies": { "expo": "*", "expo-mcp": "*", "expo-router": "*", "react-native": "*" }, "optionalPeers": ["expo-mcp", "expo-router", "react-native"], "bin": { "expo-internal": "bin/cli.js" } }, "sha512-VXXcqGuXBngzItcP97ERWON3aHJOeAwDxuRlkxgbYfW9m9DpGHM6umGgjOPWWy14xSArUvwGZpg+D5Ms+hnnkg=="],
 
@@ -815,6 +843,10 @@
     "expo-haptics": ["expo-haptics@58.0.8", "", { "peerDependencies": { "expo": "*" } }, "sha512-hxW9LoJQhAJ4hRlGx0DZ10ncs2NFqC/0nfKSnGy1PcpH6e8dJ4/oJO9eOcAG/vFg8k5oonbZkWL7RK9G3729Tg=="],
 
     "expo-image": ["expo-image@58.0.18", "", { "dependencies": { "sf-symbols-typescript": "^2.2.0" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*", "react-native-web": "*" }, "optionalPeers": ["react-native-web"] }, "sha512-bWbFD8eBbZywr1WssV6KtcglRlpD5WpzVj+oA3hfjX1MJBN43IeB7A6EQAGXE0eGBVG93Mf2dRBmCRJ/e/Hw6g=="],
+
+    "expo-image-loader": ["expo-image-loader@58.0.3", "", { "peerDependencies": { "expo": "*" } }, "sha512-zlHudxC8OObyqCHmvdxJqURI7886KJ0cUJyn7R/a8FOD9fP837xKDN+u4SIt7XsSSVPNXzMd4Y7mN0pmup8NGA=="],
+
+    "expo-image-picker": ["expo-image-picker@58.0.10", "", { "dependencies": { "expo-image-loader": "~58.0.3" }, "peerDependencies": { "expo": "*" } }, "sha512-yqQC9UYMWSUxk6U0jaS1vE1w+b9Ru0FJmQ3KjUf9Q9oVg5xBxmg8+Ts+usazMAuPoskNIXJ++VZ+uK6br9yUGQ=="],
 
     "expo-json-utils": ["expo-json-utils@58.0.1", "", {}, "sha512-jNHNElOUPz2/vW3CbDKRn6tTF6eE9wwVbh/Isnqp5c/CdTcONzFVR3YHN3WQ05PnkmieyEqVfeOusOd1X9FDtQ=="],
 

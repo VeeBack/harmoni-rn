@@ -587,6 +587,35 @@ class HarmoniPlayerModule : Module() {
       }
     }
 
+    // Web links (music.example.com/u/…) open here once Android allows it: verified by the
+    // server's assetlinks.json, or turned on by hand in the app's "Open by default" settings.
+    Function("linksEnabled") {
+      if (Build.VERSION.SDK_INT < 31) return@Function true
+      val dvm = context.getSystemService(android.content.pm.verify.domain.DomainVerificationManager::class.java) ?: return@Function false
+      val state = try { dvm.getDomainVerificationUserState(context.packageName) } catch (_: Exception) { null } ?: return@Function false
+      val hosts = state.hostToStateMap
+      hosts.isNotEmpty() && hosts.values.all { it != android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_NONE }
+    }
+
+    Function("openLinkSettings") {
+      val uri = android.net.Uri.parse("package:${context.packageName}")
+      val intent = if (Build.VERSION.SDK_INT >= 31) android.content.Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, uri)
+      else android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
+      intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      try {
+        context.startActivity(intent)
+        true
+      } catch (_: Exception) {
+        false
+      }
+    }
+
+    // 0..1, how hard the bass is hitting in what's coming out of the speaker now. Cheap: polled every frame.
+    Function("bass") { BassMeter.current?.level() ?: 0f }
+
+    // The next `n` frames of bass (1/60 s apart) from now, for the UI thread to play out.
+    Function("bassWindow") { n: Int -> BassMeter.current?.window(n.coerceIn(1, 120), 16_667L) ?: FloatArray(n.coerceIn(1, 120)) }
+
     Function("setCrossfade") { seconds: Int ->
       PlaybackService.crossfadeMs = seconds.coerceIn(0, 12) * 1000L
       if (seconds <= 0) main.post { PlaybackService.instance?.endCrossfade(true) }

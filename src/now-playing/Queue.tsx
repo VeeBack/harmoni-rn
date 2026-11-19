@@ -1,7 +1,16 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ScrollView, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 
 import { Api } from "@/api/endpoints";
 import type { QueueSong } from "@/api/types";
@@ -16,6 +25,7 @@ import { Icon } from "@/ui/Icon";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { toast } from "@/ui/overlays";
+import { spring } from "@/ui/theme";
 
 const ROW = 64;
 const W = (a: number) => `rgba(255,255,255,${a})`;
@@ -66,20 +76,38 @@ export function QueueView() {
       </Text>
       {yours.length ? <Reorderable items={yoursShown} /> : null}
       {yours.length > limit ? (
-        <Press onPress={() => setLimit((l) => l + PAGE)} feedback="tap" scaleTo={0.97} style={{ alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 10 }}>
+        <Press
+          onPress={() => setLimit((l) => l + PAGE)}
+          feedback="tap"
+          scaleTo={0.97}
+          style={{ alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 10 }}
+        >
           <Text size={13} weight={600} color={W(0.8)}>
             Show more ({(yours.length - limit).toLocaleString()} left)
           </Text>
         </Press>
       ) : null}
       {serverAutoplay ? (
-        <View style={{ marginTop: 28, marginBottom: 12, paddingTop: yours.length ? 24 : 0, borderTopWidth: yours.length ? 1 : 0, borderColor: W(0.12), flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <View
+          style={{
+            marginTop: 28,
+            marginBottom: 12,
+            paddingTop: yours.length ? 24 : 0,
+            borderTopWidth: yours.length ? 1 : 0,
+            borderColor: W(0.12),
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
           <View style={{ flex: 1 }}>
             <Text size={18} weight={600}>
               Autoplay
             </Text>
             <Text size={13} color={W(0.65)} style={{ lineHeight: 18 }}>
-              {autoplay ? "Similar songs keep playing when your queue ends." : "Turn on to keep playing similar songs when your queue ends."}
+              {autoplay
+                ? "Similar songs keep playing when your queue ends."
+                : "Turn on to keep playing similar songs when your queue ends."}
             </Text>
           </View>
           <Switch value={autoplay} onChange={toggleAutoplay} light />
@@ -93,25 +121,57 @@ export function QueueView() {
 function Reorderable({ items }: { items: Item[] }) {
   const dragging = useSharedValue(-1);
   const dy = useSharedValue(0);
+  // A drop moves rows to new places that they're already shown in: no glide for that render.
+  const instant = useRef(false);
   const commit = (from: number, to: number) => {
-    if (from === to) return;
     const a = items[from];
     const b = items[to];
-    if (!a || !b) return;
+    if (from === to || !a || !b) {
+      dragging.value = -1;
+      dy.value = 0;
+      return;
+    }
     haptic.gestureEnd();
+    instant.current = true;
     player.moveInQueue(a.at, b.at);
   };
+  useLayoutEffect(() => {
+    instant.current = false;
+    dragging.value = -1;
+    dy.value = 0;
+  }, [items, dragging, dy]);
   return (
     <View style={{ height: items.length * ROW }}>
       {items.map((item, i) => (
-        <Row key={item.key} item={item} i={i} count={items.length} dragging={dragging} dy={dy} onCommit={commit} />
+        <Row key={item.key} item={item} i={i} count={items.length} dragging={dragging} dy={dy} onCommit={commit} instant={instant} />
       ))}
     </View>
   );
 }
 
-const Row = memo(function Row({ item, i, count, dragging, dy, onCommit }: { item: Item; i: number; count: number; dragging: SharedValue<number>; dy: SharedValue<number>; onCommit: (from: number, to: number) => void }) {
+const Row = memo(function Row({
+  item,
+  i,
+  count,
+  dragging,
+  dy,
+  onCommit,
+  instant,
+}: {
+  item: Item;
+  i: number;
+  count: number;
+  dragging: SharedValue<number>;
+  dy: SharedValue<number>;
+  onCommit: (from: number, to: number) => void;
+  instant: RefObject<boolean>;
+}) {
   const lift = useSharedValue(0);
+  const top = useSharedValue(i * ROW);
+  useEffect(() => {
+    // Rows below a removed song glide up into its place.
+    top.value = instant.current ? i * ROW : withSpring(i * ROW, spring.snappy);
+  }, [i, top, instant]);
   const grip = Gesture.Pan()
     .minDistance(0)
     .onBegin(() => {
@@ -125,35 +185,55 @@ const Row = memo(function Row({ item, i, count, dragging, dy, onCommit }: { item
     })
     .onFinalize(() => {
       const target = Math.max(0, Math.min(count - 1, Math.round((i * ROW + dy.value) / ROW)));
-      lift.value = withTiming(0, { duration: 160 });
+      lift.value = withTiming(0, { duration: 180 });
       if (dragging.value === i) {
-        runOnJS(onCommit)(i, target);
-        dy.value = withTiming((target - i) * ROW, { duration: 160 }, () => {
-          dragging.value = -1;
-          dy.value = 0;
-        });
+        // Settle into the slot, then move it in the queue (the rows are already where they'll be).
+        dy.value = withSpring((target - i) * ROW, { duration: 260, dampingRatio: 0.9 }, () => runOnJS(onCommit)(i, target));
       }
     });
 
   const style = useAnimatedStyle(() => {
     const d = dragging.value;
-    if (d === i) return { transform: [{ translateY: dy.value }], zIndex: 2, backgroundColor: `rgba(255,255,255,${0.16 * lift.value})` };
-    if (d < 0) return { transform: [{ translateY: 0 }], zIndex: 0, backgroundColor: "transparent" };
+    if (d === i)
+      return {
+        top: top.value,
+        transform: [{ translateY: dy.value }, { scale: 1 + 0.02 * lift.value }],
+        zIndex: 2,
+        backgroundColor: `rgba(255,255,255,${0.16 * lift.value})`,
+      };
+    if (d < 0) return { top: top.value, transform: [{ translateY: 0 }, { scale: 1 }], zIndex: 0, backgroundColor: "transparent" };
     const target = Math.max(0, Math.min(count - 1, Math.round((d * ROW + dy.value) / ROW)));
     let shift = 0;
     if (d < i && i <= target) shift = -ROW;
     else if (target <= i && i < d) shift = ROW;
-    return { transform: [{ translateY: withTiming(shift, { duration: 220 }) }], zIndex: 0, backgroundColor: "transparent" };
+    return {
+      top: top.value,
+      transform: [{ translateY: withSpring(shift, spring.snappy) }, { scale: 1 }],
+      zIndex: 0,
+      backgroundColor: "transparent",
+    };
   });
 
   return (
-    <Animated.View style={[{ position: "absolute", left: 0, right: 0, top: i * ROW, height: ROW, borderRadius: 12 }, style]}>
+    <Animated.View
+      entering={FadeIn.duration(220)}
+      exiting={FadeOut.duration(160)}
+      style={[{ position: "absolute", left: 0, right: 0, height: ROW, borderRadius: 12 }, style]}
+    >
       <Press
         onPress={() => player.jumpTo(item.at)}
         feedback="tap"
         scaleTo={0.985}
         ripple="rgba(255,255,255,0.1)"
-        style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 10, borderRadius: 12, overflow: "hidden" }}
+        style={{
+          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+          paddingHorizontal: 10,
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
       >
         <Artwork url={item.song.artworkUrl} size={48} radius={8} />
         <View style={{ flex: 1 }}>
@@ -164,11 +244,20 @@ const Row = memo(function Row({ item, i, count, dragging, dy, onCommit }: { item
             {artistLine(item.song)}
           </Text>
         </View>
-        <Press onPress={() => player.removeFromQueue(item.at)} feedback="tap" scaleTo={0.85} accessibilityLabel={`Remove ${item.song.title} from queue`} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center", opacity: 0.7 }}>
+        <Press
+          onPress={() => player.removeFromQueue(item.at)}
+          feedback="tap"
+          scaleTo={0.85}
+          accessibilityLabel={`Remove ${item.song.title} from queue`}
+          style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center", opacity: 0.7 }}
+        >
           <Icon name="close" size={20} color="#fff" />
         </Press>
         <GestureDetector gesture={grip}>
-          <View accessibilityLabel={`Move ${item.song.title}`} style={{ width: 36, height: 44, alignItems: "center", justifyContent: "center", opacity: 0.7 }}>
+          <View
+            accessibilityLabel={`Move ${item.song.title}`}
+            style={{ width: 36, height: 44, alignItems: "center", justifyContent: "center", opacity: 0.7 }}
+          >
             <Icon name="grip" size={20} color="#fff" />
           </View>
         </GestureDetector>

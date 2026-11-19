@@ -21,7 +21,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -197,7 +199,12 @@ class PlaybackService : MediaLibraryService() {
   override fun onCreate() {
     super.onCreate()
     Core.init(this)
-    player = ExoPlayer.Builder(this)
+    // The audio goes through a BassMeter on its way out, for the Now Playing backdrop.
+    val renderers = object : DefaultRenderersFactory(this) {
+      override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink? =
+        super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)?.let { BassMeter(it) }
+    }
+    player = ExoPlayer.Builder(this, renderers)
       .setMediaSourceFactory(DefaultMediaSourceFactory(Core.playbackDataSource))
       .setAudioAttributes(
         AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),

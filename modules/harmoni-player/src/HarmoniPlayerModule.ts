@@ -71,7 +71,15 @@ type Events = {
   onRemoteLike: (e: { songId: string; liked: boolean }) => void;
   onDownload: (e: DownloadEvent) => void;
   onSignedOut: (e: Record<string, never>) => void;
-  onRemoteCommand: (e: { type: "toggle" | "next" | "prev" | "seek" | "jumpTo" | "repeat" | "shuffle" | "volume" | "mute"; positionMs?: number; index?: number; mode?: "off" | "all" | "one"; on?: boolean; volume?: number; muted?: boolean }) => void;
+  onRemoteCommand: (e: {
+    type: "toggle" | "next" | "prev" | "seek" | "jumpTo" | "repeat" | "shuffle" | "volume" | "mute";
+    positionMs?: number;
+    index?: number;
+    mode?: "off" | "all" | "one";
+    on?: boolean;
+    volume?: number;
+    muted?: boolean;
+  }) => void;
   onSystemTransfer: (e: { to: string | null }) => void;
 };
 
@@ -103,6 +111,14 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   pauseAtEndOfSong(on: boolean): Promise<void>;
   setSmooth(on: boolean): void;
   setCrossfade(seconds: number): void;
+  /** 0..1: how hard the bass is hitting in what is coming out of the speaker now (0 when paused). */
+  bass(): number;
+  /** The next `n` frames of bass (1/60 s apart) from now; -1 past what's decoded yet. */
+  bassWindow(n: number): number[];
+  /** Whether Android opens this server's web links in the app (always true before Android 12). */
+  linksEnabled(): boolean;
+  /** Opens the app's "Open by default" settings, where links can be turned on. */
+  openLinkSettings(): boolean;
   setRemote(json: string | null): Promise<void>;
   setLinkDevices(json: string, active: string | null, volume: number): void;
 

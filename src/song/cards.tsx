@@ -6,6 +6,7 @@ import { errorMessage } from "@/api/client";
 import { Api } from "@/api/endpoints";
 import { useArtistImage } from "@/api/token";
 import type { ArtistCard, Song, SpiceCard } from "@/api/types";
+import { deviceTimeZone } from "@/lib/day-part";
 import { plural } from "@/lib/format";
 import { usePlayback } from "@/player/hooks";
 import { player } from "@/player/player";
@@ -46,10 +47,26 @@ export function useGridWidth() {
   return Math.floor((width - 40 - 14) / 2);
 }
 
-export const CardLink = memo(function CardLink({ title, subtitle, artwork, onPress, width, children }: { title: string; subtitle?: string; artwork?: string; onPress: () => void; width: number; children?: ReactNode }) {
+export const CardLink = memo(function CardLink({
+  title,
+  subtitle,
+  artwork,
+  onPress,
+  width,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  artwork?: string;
+  onPress: () => void;
+  width: number;
+  children?: ReactNode;
+}) {
   return (
     <Press onPress={onPress} feedback="tap" scaleTo={0.96} style={{ width, gap: 8 }} accessibilityLabel={title}>
-      <View style={[cardArt, { width, height: width }]}>{children ?? <Artwork url={artwork} size={width} radius={radius.md} fallback="playlist" />}</View>
+      <View style={[cardArt, { width, height: width }]}>
+        {children ?? <Artwork url={artwork} size={width} radius={radius.md} fallback="playlist" />}
+      </View>
       <View>
         <Text variant="subhead" weight={500} numberOfLines={1}>
           {title}
@@ -64,17 +81,42 @@ export const CardLink = memo(function CardLink({ title, subtitle, artwork, onPre
   );
 });
 
-const cardArt = { borderRadius: radius.md, overflow: "hidden" as const, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.06)" };
+const cardArt = {
+  borderRadius: radius.md,
+  overflow: "hidden" as const,
+  backgroundColor: colors.surface2,
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: "rgba(255,255,255,0.06)",
+};
 
 /** A song as a card (Apple Music shelves): tap plays the shelf from here, long press for the menu. */
 export const SongCard = memo(function SongCard({ song, list, index, width }: { song: Song; list: Song[]; index: number; width: number }) {
   const current = useCurrentState(song.id);
   return (
-    <Press onPress={() => (current ? player.toggle() : player.play(list, index))} onLongPress={() => openSongMenu(song)} feedback="tap" scaleTo={0.96} style={{ width, gap: 8 }} accessibilityLabel={song.title}>
+    <Press
+      onPress={() => (current ? player.toggle() : player.play(list, index))}
+      onLongPress={() => openSongMenu(song)}
+      feedback="tap"
+      scaleTo={0.96}
+      style={{ width, gap: 8 }}
+      accessibilityLabel={song.title}
+    >
       <View style={[cardArt, { width, height: width }]}>
         <Artwork url={song.artworkUrl} size={width} radius={radius.md} />
         {current ? (
-          <View style={{ position: "absolute", left: 8, bottom: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              position: "absolute",
+              left: 8,
+              bottom: 8,
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Equalizer playing={current === 2} color="#fff" />
           </View>
         ) : null}
@@ -94,7 +136,7 @@ export const SongCard = memo(function SongCard({ song, list, index, width }: { s
 /** Opens a Spice (freshening it) and plays it from the top. */
 export async function playSpice(spice: Pick<SpiceCard, "id" | "kind">) {
   try {
-    const s = await Api.spice(spice.id);
+    const s = await Api.spice(spice.id, deviceTimeZone());
     if (!s.songs.length) {
       toast(spice.kind === "custom" ? "Add a seed song first." : "Nothing in this Spice yet.");
       return;
@@ -111,7 +153,13 @@ export const SpiceCardLink = memo(function SpiceCardLink({ spice, width }: { spi
   const pb = usePlayback();
   void pb;
   return (
-    <Press onPress={() => router.push(`/spice/${spice.id}`)} feedback="tap" scaleTo={0.96} style={{ width, gap: 8 }} accessibilityLabel={spice.name}>
+    <Press
+      onPress={() => router.push(`/spice/${spice.id}`)}
+      feedback="tap"
+      scaleTo={0.96}
+      style={{ width, gap: 8 }}
+      accessibilityLabel={spice.name}
+    >
       <View style={[cardArt, { width, height: width }]}>
         <SpiceArt name={spice.name} covers={spice.covers} clearRight />
         <View style={{ position: "absolute", right: 8, bottom: 8 }}>
@@ -145,7 +193,13 @@ export function artistImage(a: ArtistCard): string | undefined {
 export const ArtistChip = memo(function ArtistChip({ artist, fallback }: { artist: ArtistCard; fallback?: string }) {
   const proxied = useArtistImage(artist.imageUrl ? undefined : artist.id);
   return (
-    <Press onPress={() => router.push(`/artist/${artist.id}`)} feedback="tap" scaleTo={0.95} style={{ width: 112, gap: 8, alignItems: "center" }} accessibilityLabel={artist.name}>
+    <Press
+      onPress={() => router.push(`/artist/${artist.id}`)}
+      feedback="tap"
+      scaleTo={0.95}
+      style={{ width: 112, gap: 8, alignItems: "center" }}
+      accessibilityLabel={artist.name}
+    >
       <Artwork url={artist.imageUrl ?? fallback} source={proxied} size={112} round fallback="user" />
       <Text variant="subhead" weight={500} numberOfLines={1} align="center" style={{ width: 112 }}>
         {artist.name}
@@ -156,7 +210,12 @@ export const ArtistChip = memo(function ArtistChip({ artist, fallback }: { artis
 
 export function ArtistRow({ artists, fallbacks }: { artists: ArtistCard[]; fallbacks?: Record<string, string | undefined> }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 8 }}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ marginHorizontal: -20 }}
+      contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 8 }}
+    >
       {artists.map((a) => (
         <ArtistChip key={a.id} artist={a} fallback={fallbacks?.[a.id]} />
       ))}

@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard, TextInput, View } from "react-native";
@@ -13,7 +14,9 @@ import { streamSearch, type SearchState } from "@/search/stream";
 import { searchFocus } from "@/shell/state";
 import { ArtistRow, playSpice } from "@/song/cards";
 import { SongList } from "@/song/SongList";
+import { PeopleRow } from "@/profile/people";
 import { SpiceArt } from "@/spice/SpiceArt";
+import { Api } from "@/api/endpoints";
 import { Artwork } from "@/ui/Artwork";
 import { EmptyState, PlayButton, Section, Skeleton, SongRowsSkeleton } from "@/ui/bits";
 import { Icon } from "@/ui/Icon";
@@ -57,7 +60,18 @@ export default function Search() {
   }, [query]);
 
   const field = (
-    <View style={{ height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)", flexDirection: "row", alignItems: "center", paddingLeft: 10, paddingRight: 6, gap: 6 }}>
+    <View
+      style={{
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: "rgba(255,255,255,0.1)",
+        flexDirection: "row",
+        alignItems: "center",
+        paddingLeft: 10,
+        paddingRight: 6,
+        gap: 6,
+      }}
+    >
       <Icon name="search" size={17} color={colors.text2} />
       <TextInput
         ref={input}
@@ -89,7 +103,16 @@ export default function Search() {
           accessibilityLabel="Clear"
           style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
         >
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.text3, alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              backgroundColor: colors.text3,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Icon name="close" size={11} color={colors.bg} />
           </View>
         </Press>
@@ -98,11 +121,20 @@ export default function Search() {
   );
 
   return (
-    <Screen tab="(search)" topBar={<TopBar fill={field} alwaysSolid />} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
+    <Screen
+      tab="(search)"
+      topBar={<TopBar fill={field} alwaysSolid />}
+      keyboardShouldPersistTaps="handled"
+      onScrollBeginDrag={() => Keyboard.dismiss()}
+    >
       {!state ? (
         <View>
           <PageTitle subtitle="What are you in the mood for?">Search</PageTitle>
-          <EmptyState title="Type in the search bar up top" body="Songs, artists, lyrics you half remember. Harmoni checks every source at once." icon="search" />
+          <EmptyState
+            title="Type in the search bar up top"
+            body="Songs, artists, lyrics you half remember. Harmoni checks every source at once."
+            icon="search"
+          />
         </View>
       ) : (
         <Results state={state} />
@@ -113,6 +145,21 @@ export default function Search() {
 
 function Results({ state }: { state: SearchState }) {
   const { results, spice } = state;
+  // People on this server, alongside the music.
+  const people = useQuery({
+    queryKey: ["users", state.query],
+    queryFn: () => Api.users(state.query).catch(() => []),
+    enabled: !!state.query,
+    staleTime: 60_000,
+  }).data;
+  // Searching someone's username or full name: they're who you're after.
+  const q = state.query.toLowerCase().replace(/^@/, "");
+  const exactPerson = !!people?.some((p) => p.username.toLowerCase() === q || p.name.toLowerCase() === q);
+  const peopleSection = people?.length ? (
+    <Section title="People" style={exactPerson ? { marginTop: 16 } : undefined}>
+      <PeopleRow users={people} />
+    </Section>
+  ) : null;
   const artists = useMemo(() => {
     const map = new Map<string, ArtistCard & { songs: number; cover?: string }>();
     for (const s of results) {
@@ -125,31 +172,44 @@ function Results({ state }: { state: SearchState }) {
     }
     return [...map.values()];
   }, [results]);
-  const topArtist = useMemo(() => (results.length ? pickTopArtist(state.query, artists, results[0]) : undefined), [state.query, artists, results]);
+  const topArtist = useMemo(
+    () => (results.length ? pickTopArtist(state.query, artists, results[0]) : undefined),
+    [state.query, artists, results],
+  );
 
   if (!results.length && !state.done) return <SearchSkeleton />;
   if (state.error && !results.length)
     return (
       <View style={{ marginTop: 16 }}>
-        <EmptyState title="Search hit a snag" body="Something went wrong talking to the server. Give it another go in a moment." icon="cloud-off" />
+        <EmptyState
+          title="Search hit a snag"
+          body="Something went wrong talking to the server. Give it another go in a moment."
+          icon="cloud-off"
+        />
       </View>
     );
+  if (!results.length && people?.length) return <Animated.View entering={FadeIn.duration(200)}>{peopleSection}</Animated.View>;
   if (!results.length)
     return (
       <View style={{ marginTop: 16 }}>
-        <EmptyState title="Nothing turned up" body={`No sources had anything for “${state.query}”. Check the spelling, or try the artist's name on its own.`} />
+        <EmptyState
+          title="Nothing turned up"
+          body={`No sources had anything for “${state.query}”. Check the spelling, or try the artist's name on its own.`}
+        />
       </View>
     );
 
   return (
     <Animated.View entering={FadeIn.duration(200)}>
+      {exactPerson ? peopleSection : null}
       {spice ? <SpiceResult spice={spice} /> : null}
-      <Section title="Top result" style={{ marginTop: spice ? 24 : 16 }}>
+      <Section title="Top result" style={{ marginTop: spice || exactPerson ? 24 : 16 }}>
         {topArtist ? <TopArtist artist={topArtist} results={results} /> : <TopSong song={results[0]} />}
       </Section>
       <Section title="Songs">
         <SongList songs={results.slice(0, 5)} single />
       </Section>
+      {exactPerson ? null : peopleSection}
       {artists.length ? (
         <Section title="Artists">
           <ArtistRow artists={artists.slice(0, 10)} fallbacks={Object.fromEntries(artists.map((a) => [a.id, a.cover]))} />
@@ -189,7 +249,19 @@ function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
       feedback="tap"
       scaleTo={0.98}
       ripple
-      style={{ marginTop: 16, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 10, paddingRight: 14, flexDirection: "row", alignItems: "center", gap: 14, overflow: "hidden" }}
+      style={{
+        marginTop: 16,
+        borderRadius: radius.xl,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 10,
+        paddingRight: 14,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        overflow: "hidden",
+      }}
     >
       <View style={{ width: 68, height: 68, borderRadius: 12, overflow: "hidden" }}>
         <SpiceArt name={spice.name} covers={spice.covers} label={false} />
@@ -217,11 +289,34 @@ function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
   );
 }
 
-function HeroCard({ art, source, round, title, meta, onPress, playing, onPlay }: { art?: string; source?: { uri: string; headers?: Record<string, string> }; round?: boolean; title: string; meta: string; onPress: () => void; playing: boolean; onPlay: () => void }) {
+function HeroCard({
+  art,
+  source,
+  round,
+  title,
+  meta,
+  onPress,
+  playing,
+  onPlay,
+}: {
+  art?: string;
+  source?: { uri: string; headers?: Record<string, string> };
+  round?: boolean;
+  title: string;
+  meta: string;
+  onPress: () => void;
+  playing: boolean;
+  onPlay: () => void;
+}) {
   const theme = useArtworkColors(art);
   const { ink, inkMuted } = theme ? inkFor(theme) : { ink: colors.text, inkMuted: colors.text2 };
   return (
-    <Press onPress={onPress} feedback="tap" scaleTo={0.98} style={{ padding: 20, borderRadius: radius.xl, backgroundColor: theme?.color ?? colors.surface2, gap: 20 }}>
+    <Press
+      onPress={onPress}
+      feedback="tap"
+      scaleTo={0.98}
+      style={{ padding: 20, borderRadius: radius.xl, backgroundColor: theme?.color ?? colors.surface2, gap: 20 }}
+    >
       <View style={{ elevation: round ? 10 : 0, shadowColor: "#000", alignSelf: "flex-start", borderRadius: round ? 68 : 16 }}>
         <Artwork url={art} source={source} size={136} round={round} radius={16} fallback={round ? "user" : "music"} />
       </View>
@@ -244,7 +339,16 @@ function TopSong({ song }: { song: Song }) {
   const pb = usePlayback();
   const current = pb.song?.id === song.id;
   const go = () => (current ? player.toggle() : player.play([song], 0));
-  return <HeroCard art={song.artworkUrl} title={song.title} meta={`Song · ${artistLine(song)}`} onPress={go} playing={current && pb.playing} onPlay={go} />;
+  return (
+    <HeroCard
+      art={song.artworkUrl}
+      title={song.title}
+      meta={`Song · ${artistLine(song)}`}
+      onPress={go}
+      playing={current && pb.playing}
+      onPlay={go}
+    />
+  );
 }
 
 function TopArtist({ artist, results }: { artist: ArtistCard & { cover?: string }; results: Song[] }) {

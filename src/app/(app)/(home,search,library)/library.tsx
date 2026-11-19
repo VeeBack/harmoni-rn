@@ -5,12 +5,17 @@ import { Api } from "@/api/endpoints";
 import { useDownloads } from "@/downloads/downloads";
 import { plural } from "@/lib/format";
 import { CardLink, SpiceCardLink, useGridWidth } from "@/song/cards";
+import { profilePath } from "@/lib/share";
+import { Avatar } from "@/profile/Avatar";
+import { DAILY_SPICE_HREF, useDailySpice } from "@/spice/daily";
 import { useSpiceDraft } from "@/spice/draft";
-import { libraryChanged, sortCollections, usePlaylists, useSpices } from "@/state/collections";
+import { libraryChanged, sortCollections, usePlaylists, useSharedPlaylists, useSpices } from "@/state/collections";
+import { useSession } from "@/state/session";
 import { EmptyState, Section, Skeleton, SmallButton } from "@/ui/bits";
 import { Icon, type IconName } from "@/ui/Icon";
 import { openMenu, prompt, toast } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
+import type { ReactNode } from "react";
 import { Screen } from "@/ui/Screen";
 import { Text } from "@/ui/Text";
 import { colors } from "@/ui/theme";
@@ -47,6 +52,9 @@ export function openNewMenu() {
 export default function Library() {
   const playlists = usePlaylists();
   const spices = useSpices();
+  const shared = useSharedPlaylists();
+  const daily = useDailySpice();
+  const me = useSession((st) => st.me);
   const w = useGridWidth();
   const downloads = useDownloads((s) => Object.values(s.items).filter((d) => d.state === "done").length);
   const cols = sortCollections(playlists.data, spices.data);
@@ -60,15 +68,32 @@ export default function Library() {
       onRefresh={() => {
         playlists.refetch();
         spices.refetch();
+        shared.refetch();
       }}
     >
       <View style={{ marginTop: 4 }}>
         <Row icon="heart" label="Liked Songs" onPress={() => router.push("/liked")} />
         <Row icon="history" label="Recently Played" onPress={() => router.push("/recent")} />
-        <Row icon="download" label="Downloads" detail={downloads ? plural(downloads, "song") : undefined} onPress={() => router.push("/downloads")} />
+        {daily ? <Row icon="spice" label={daily.label} detail={daily.part} onPress={() => router.push(DAILY_SPICE_HREF as never)} /> : null}
+        <Row
+          icon="download"
+          label="Downloads"
+          detail={downloads ? plural(downloads, "song") : undefined}
+          onPress={() => router.push("/downloads")}
+        />
+        {me?.username ? (
+          <Row
+            leading={<Avatar name={me.name} url={me.avatarUrl} accent={me.accent} size={26} />}
+            label="Your profile"
+            onPress={() => router.push(profilePath(me.username) as never)}
+          />
+        ) : null}
         <Row icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
       </View>
-      <Section title="Playlists" action={<SmallButton label="New" icon="plus" accessibilityLabel="New playlist or Spice" onPress={openNewMenu} />}>
+      <Section
+        title="Playlists"
+        action={<SmallButton label="New" icon="plus" accessibilityLabel="New playlist or Spice" onPress={openNewMenu} />}
+      >
         {loading ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
             {[0, 1, 2, 3].map((i) => (
@@ -81,7 +106,14 @@ export default function Library() {
           <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 20 }}>
             {cols.map((c) =>
               c.type === "playlist" ? (
-                <CardLink key={`p${c.id}`} title={c.name} subtitle={`Playlist · ${plural(c.count, "song")}`} artwork={c.artworks[0]} width={w} onPress={() => router.push(`/playlist/${c.id}`)} />
+                <CardLink
+                  key={`p${c.id}`}
+                  title={c.name}
+                  subtitle={`Playlist · ${plural(c.count, "song")}`}
+                  artwork={c.artworks[0]}
+                  width={w}
+                  onPress={() => router.push(`/playlist/${c.id}`)}
+                />
               ) : (
                 <SpiceCardLink key={`s${c.id}`} spice={c} width={w} />
               ),
@@ -89,16 +121,55 @@ export default function Library() {
           </View>
         )}
       </Section>
+      {shared.data?.length ? (
+        <Section title="Shared with you">
+          <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 20 }}>
+            {shared.data.map((p) => (
+              <CardLink
+                key={p.id}
+                title={p.name}
+                subtitle={`${p.owner.name} · ${plural(p.count, "song")}`}
+                artwork={p.artworks[0]}
+                width={w}
+                onPress={() => router.push(`/playlist/${p.id}`)}
+              />
+            ))}
+          </View>
+        </Section>
+      ) : null}
     </Screen>
   );
 }
 
-function Row({ icon, label, detail, onPress, last }: { icon: IconName; label: string; detail?: string; onPress: () => void; last?: boolean }) {
+function Row({
+  icon,
+  leading,
+  label,
+  detail,
+  onPress,
+  last,
+}: {
+  icon?: IconName;
+  leading?: ReactNode;
+  label: string;
+  detail?: string;
+  onPress: () => void;
+  last?: boolean;
+}) {
   return (
-    <Press onPress={onPress} feedback={false} scaleTo={1} highlight="rgba(255,255,255,0.06)" style={styles.row}>
-      <Icon name={icon} size={22} color={colors.tint} />
+    <Press
+      onPress={onPress}
+      feedback={false}
+      scaleTo={1}
+      highlight="rgba(255,255,255,0.06)"
+      style={styles.row}
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+    >
+      <View style={{ width: 26, alignItems: "center" }}>
+        {leading ?? (icon ? <Icon name={icon} size={22} color={colors.tint} /> : null)}
+      </View>
       <View style={styles.rowBody}>
-        <Text variant="title3" weight={400} style={{ flex: 1 }}>
+        <Text variant="title3" weight={400} numberOfLines={1} style={{ flex: 1 }}>
           {label}
         </Text>
         {detail ? (

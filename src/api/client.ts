@@ -33,6 +33,8 @@ export async function authHeader(): Promise<Record<string, string>> {
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
+  /** A body sent as is (a picture), instead of JSON. */
+  raw?: { data: Uint8Array; type: string };
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -50,9 +52,9 @@ async function send(path: string, opts: RequestOptions, token: string | null) {
       headers: {
         Accept: "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(opts.raw ? { "Content-Type": opts.raw.type } : opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.raw ? (opts.raw.data as unknown as BodyInit) : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       signal: controller.signal,
     });
   } finally {

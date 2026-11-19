@@ -5,8 +5,9 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import * as WebBrowser from "expo-web-browser";
 import Native from "harmoni-player";
+import { router } from "expo-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { AppState, StyleSheet, View } from "react-native";
 
 import { errorMessage, serverOrigin } from "@/api/client";
 import { Api } from "@/api/endpoints";
@@ -15,6 +16,7 @@ import { removeAllDownloads, useDownloads } from "@/downloads/downloads";
 import { readAppleLibrary } from "@/lib/apple-library";
 import { bytes, plural, shortDate } from "@/lib/format";
 import { hapticsEnabled, setHapticsEnabled } from "@/lib/haptics";
+import { profilePath } from "@/lib/share";
 import { kv } from "@/lib/storage";
 import { deviceName, onlineDevices, setDeviceName, setLinkPref, useLink, useLinkPref, deviceId } from "@/link/link";
 import { dropAutoplaySongs } from "@/player/player";
@@ -46,16 +48,53 @@ function Group({ title, note, children }: { title: ReactNode; note?: ReactNode; 
   );
 }
 
-function Row({ title, note, children, first, onPress, icon }: { title: ReactNode; note?: ReactNode; children?: ReactNode; first?: boolean; onPress?: () => void; icon?: IconName }) {
+function Row({
+  title,
+  note,
+  children,
+  first,
+  onPress,
+  icon,
+}: {
+  title: ReactNode;
+  note?: ReactNode;
+  children?: ReactNode;
+  first?: boolean;
+  onPress?: () => void;
+  icon?: IconName;
+}) {
   const body = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingLeft: 16, minHeight: 52 }}>
       {icon ? (
-        <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: "rgba(242,221,191,0.12)", alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            backgroundColor: "rgba(242,221,191,0.12)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Icon name={icon} size={18} color={colors.tint} />
         </View>
       ) : null}
-      <View style={{ flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 16, paddingVertical: 11 }}>
-        {first ? null : <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />}
+      <View
+        style={{
+          flex: 1,
+          alignSelf: "stretch",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          paddingRight: 16,
+          paddingVertical: 11,
+        }}
+      >
+        {first ? null : (
+          <View
+            style={{ position: "absolute", left: 0, right: 0, top: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }}
+          />
+        )}
         <View style={{ flex: 1, gap: 2 }}>
           {typeof title === "string" ? <Text variant="body">{title}</Text> : title}
           {note ? (
@@ -88,7 +127,10 @@ function OffHere() {
 
 function openWeb(path: string) {
   const origin = serverOrigin();
-  if (origin) WebBrowser.openBrowserAsync(`${origin}${path}`, { showTitle: true, toolbarColor: colors.bg, enableBarCollapsing: true }).catch(() => {});
+  if (origin)
+    WebBrowser.openBrowserAsync(`${origin}${path}`, { showTitle: true, toolbarColor: colors.bg, enableBarCollapsing: true }).catch(
+      () => {},
+    );
 }
 
 export default function Settings() {
@@ -111,14 +153,19 @@ export default function Settings() {
 
   return (
     <Screen back title="Settings" large>
-
       <Group title="Your account">
         <Row first title={me?.name ?? "…"} note={me ? `@${me.username}${me.role === "admin" ? " · Admin" : ""}` : undefined}>
           <SmallButton
             label="Edit"
             icon="edit"
             onPress={async () => {
-              const name = await prompt({ title: "Your name", note: "It's what Harmoni calls you, and what other people here see.", label: "Name", defaultValue: me?.name, confirm: "Save" });
+              const name = await prompt({
+                title: "Your name",
+                note: "It's what Harmoni calls you, and what other people here see.",
+                label: "Name",
+                defaultValue: me?.name,
+                confirm: "Save",
+              });
               if (!name) return;
               try {
                 setMe(await Api.updateMe({ name }));
@@ -129,13 +176,32 @@ export default function Settings() {
             }}
           />
         </Row>
-        <Row title="Password, sessions and apps" note="Change your password, or see where you're signed in, on the web." onPress={() => openWeb("/settings")} />
+        {me?.username ? (
+          <Row
+            icon="user"
+            title="Your profile"
+            note="Your picture, banner, colours and font, and the songs you put on display."
+            onPress={() => router.push(profilePath(me.username) as never)}
+          />
+        ) : null}
+        <Row
+          title="Password, sessions and apps"
+          note="Change your password, or see where you're signed in, on the web."
+          onPress={() => openWeb("/settings")}
+        />
         <Row title="Sign out" note="Of this phone. Downloads on it are removed.">
           <SmallButton
             label="Sign out"
             icon="logout"
             onPress={async () => {
-              if (!(await confirm({ title: "Sign out?", note: "You'll need to sign in again to listen on this phone. Songs downloaded to it are removed.", confirm: "Sign out" }))) return;
+              if (
+                !(await confirm({
+                  title: "Sign out?",
+                  note: "You'll need to sign in again to listen on this phone. Songs downloaded to it are removed.",
+                  confirm: "Sign out",
+                }))
+              )
+                return;
               await signOut();
               clearQueryCache();
             }}
@@ -145,7 +211,13 @@ export default function Settings() {
 
       {me?.role === "admin" ? (
         <Group title="Your server">
-          <Row first icon="server" title="Server settings" note={`You run ${me.server.name}: people, sign-ups, features, where music comes from, and the audio cache. Opens on the web.`} onPress={() => openWeb("/settings/server")} />
+          <Row
+            first
+            icon="server"
+            title="Server settings"
+            note={`You run ${me.server.name}: people, sign-ups, features, where music comes from, and the audio cache. Opens on the web.`}
+            onPress={() => openWeb("/settings/server")}
+          />
         </Group>
       ) : null}
 
@@ -158,7 +230,11 @@ export default function Settings() {
           title="Super Processing"
           note="Harmoni learns from how you listen, and uses it to fill your home screen with mixes, new finds and old favourites, and to choose what autoplay plays next."
         >
-          {f && !f.superProcessing ? <OffHere /> : <Switch value={!!me?.superProcessing} onChange={(v) => patch("superProcessing", v, "Couldn't change Super Processing.")} />}
+          {f && !f.superProcessing ? (
+            <OffHere />
+          ) : (
+            <Switch value={!!me?.superProcessing} onChange={(v) => patch("superProcessing", v, "Couldn't change Super Processing.")} />
+          )}
         </Row>
         {me?.superProcessing ? (
           <View style={{ paddingLeft: 38, paddingRight: 20, paddingBottom: 16, gap: 6 }}>
@@ -196,8 +272,15 @@ export default function Settings() {
             />
           </Row>
         ) : null}
-        <Row title="Autoplay" note={`When your queue runs out, keep playing songs like the one that just played${me?.superProcessing ? ", picked for you" : ""}.`}>
-          {f && !f.autoplay ? <OffHere /> : <Switch value={!!me?.autoplay} onChange={(v) => patch("autoplay", v, "Couldn't change autoplay.")} />}
+        <Row
+          title="Autoplay"
+          note={`When your queue runs out, keep playing songs like the one that just played${me?.superProcessing ? ", picked for you" : ""}.`}
+        >
+          {f && !f.autoplay ? (
+            <OffHere />
+          ) : (
+            <Switch value={!!me?.autoplay} onChange={(v) => patch("autoplay", v, "Couldn't change autoplay.")} />
+          )}
         </Row>
       </Group>
 
@@ -209,13 +292,20 @@ export default function Settings() {
         <Row first title="Haptics" note="Little taps under your finger as you play, skip and pick.">
           <HapticsSwitch />
         </Row>
+        <Row title="Move with the music" note="In Now Playing, the background swells and glows with the bass.">
+          <KvSwitch k="settings.bassBackdrop" initial />
+        </Row>
         {Native.canPinWidget() ? (
           <Row title="Home screen widget" note="What's playing, with play, skip and back, right on your home screen.">
             <SmallButton label="Add" icon="plus" onPress={() => Native.pinWidget()} />
           </Row>
         ) : null}
+        <LinksRow />
         <Row title="Server" note={serverOrigin()?.replace(/^https?:\/\//, "")} />
-        <Row title="Version" note={`Harmoni for Android ${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`} />
+        <Row
+          title="Version"
+          note={`Harmoni for Android ${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`}
+        />
       </Group>
       <Text size={13} color={colors.text3} style={{ marginTop: 10, marginHorizontal: 4 }}>
         Harmoni on {me?.server.name ?? "your server"}
@@ -287,7 +377,10 @@ function PlaybackGroup() {
       {Native.hasEqualizer() ? (
         <Row title="Equalizer" note="Shape the sound with your phone's equalizer." onPress={() => Native.openEqualizer()} />
       ) : null}
-      <Row title="Load the next song early" note="The next song starts straight away, even on a slow connection. Harmoni always does this on Android.">
+      <Row
+        title="Load the next song early"
+        note="The next song starts straight away, even on a slow connection. Harmoni always does this on Android."
+      >
         <Icon name="check" size={20} color={colors.accent} />
       </Row>
     </Group>
@@ -303,13 +396,25 @@ function DownloadsGroup() {
   }, [done]);
   return (
     <Group title="Downloads" note="Songs you download play without a connection, from this phone's storage.">
-      <Row first title={done ? `${plural(done, "song")} saved` : "Nothing saved yet"} note={done ? `${bytes(size)} on this phone` : "Download a playlist, album, Spice or song to listen offline."}>
+      <Row
+        first
+        title={done ? `${plural(done, "song")} saved` : "Nothing saved yet"}
+        note={done ? `${bytes(size)} on this phone` : "Download a playlist, album, Spice or song to listen offline."}
+      >
         {done ? (
           <SmallButton
             label="Remove all"
             icon="trash"
             onPress={async () => {
-              if (await confirm({ title: "Remove all downloads?", note: `${plural(done, "song")} saved on this phone will be removed.`, confirm: "Remove all", danger: true })) removeAllDownloads();
+              if (
+                await confirm({
+                  title: "Remove all downloads?",
+                  note: `${plural(done, "song")} saved on this phone will be removed.`,
+                  confirm: "Remove all",
+                  danger: true,
+                })
+              )
+                removeAllDownloads();
             }}
           />
         ) : null}
@@ -340,7 +445,16 @@ function LinkGroup() {
       <Row first title="Use Harmoni Link on this phone" note="Turn it off to keep this phone's playback to itself.">
         <Switch value={on} onChange={setLinkPref} />
       </Row>
-      <Row title={name} note={!on ? "This phone." : connected ? `This phone. ${others ? `${plural(others, "other device")} ${others === 1 ? "is" : "are"} here now.` : "No other devices here now."}` : "Connecting…"}>
+      <Row
+        title={name}
+        note={
+          !on
+            ? "This phone."
+            : connected
+              ? `This phone. ${others ? `${plural(others, "other device")} ${others === 1 ? "is" : "are"} here now.` : "No other devices here now."}`
+              : "Connecting…"
+        }
+      >
         <SmallButton
           label="Rename"
           icon="edit"
@@ -396,7 +510,15 @@ function InvitesGroup({ days }: { days: number }) {
           }}
           feedback="confirm"
           scaleTo={0.95}
-          style={{ height: 34, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", gap: 6 }}
+          style={{
+            height: 34,
+            paddingHorizontal: 14,
+            borderRadius: 999,
+            backgroundColor: colors.accent,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
         >
           <Icon name="ticket" size={15} color={colors.accentInk} />
           <Text size={13} weight={500} color={colors.accentInk}>
@@ -482,8 +604,17 @@ function ImportGroup() {
   const stop = async () => {
     const adding = p?.status === "adding";
     const yes = adding
-      ? await confirm({ title: "Stop bringing it in?", note: "Nothing from this library is added. You can start again any time.", confirm: "Stop", danger: true })
-      : await confirm({ title: "Stop looking for songs?", note: "Your library stays as it is. Songs not looked up yet are still found the first time you play them.", confirm: "Stop" });
+      ? await confirm({
+          title: "Stop bringing it in?",
+          note: "Nothing from this library is added. You can start again any time.",
+          confirm: "Stop",
+          danger: true,
+        })
+      : await confirm({
+          title: "Stop looking for songs?",
+          note: "Your library stays as it is. Songs not looked up yet are still found the first time you play them.",
+          confirm: "Stop",
+        });
     if (!yes) return;
     try {
       await Api.stopImport();
@@ -494,14 +625,19 @@ function ImportGroup() {
   };
 
   const meter = (n: number, d: number) => (
-    <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surface3, marginHorizontal: 20, marginBottom: 16, overflow: "hidden" }}>
+    <View
+      style={{ height: 8, borderRadius: 4, backgroundColor: colors.surface3, marginHorizontal: 20, marginBottom: 16, overflow: "hidden" }}
+    >
       <View style={{ height: 8, width: `${d ? Math.min(100, (n / d) * 100) : 0}%`, backgroundColor: colors.accent }} />
     </View>
   );
 
   const missing = p?.status === "done" ? (p.summary?.missing ?? []) : [];
   return (
-    <Group title="Bring your music" note="Your Apple Music library, playlists and play counts. In Music or iTunes on a computer, choose File → Library → Export Library…, then pick the file here.">
+    <Group
+      title="Bring your music"
+      note="Your Apple Music library, playlists and play counts. In Music or iTunes on a computer, choose File → Library → Export Library…, then pick the file here."
+    >
       {p?.status === "adding" ? (
         <>
           <Row first title="Bringing in your library" note={`${p.done.toLocaleString()} of ${p.total.toLocaleString()} songs`}>
@@ -539,7 +675,20 @@ function ImportGroup() {
           ) : p?.status === "done" ? (
             <SmallButton label="Again" icon="plus" onPress={choose} />
           ) : (
-            <Press onPress={choose} feedback="tap" scaleTo={0.95} style={{ height: 34, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Press
+              onPress={choose}
+              feedback="tap"
+              scaleTo={0.95}
+              style={{
+                height: 34,
+                paddingHorizontal: 14,
+                borderRadius: 999,
+                backgroundColor: colors.accent,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
               <Icon name="plus" size={15} color={colors.accentInk} />
               <Text size={13} weight={500} color={colors.accentInk}>
                 Choose file
@@ -550,7 +699,10 @@ function ImportGroup() {
       )}
       {missing.length ? (
         <>
-          <Row title={`${missing.length.toLocaleString()} songs not found anywhere`} note="None of the music services had these, so they have no artwork. They stay in your library, and playing one still looks for it." />
+          <Row
+            title={`${missing.length.toLocaleString()} songs not found anywhere`}
+            note="None of the music services had these, so they have no artwork. They stay in your library, and playing one still looks for it."
+          />
           <View style={{ paddingHorizontal: 20, paddingBottom: 16, gap: 6 }}>
             {(showMissing ? missing : missing.slice(0, 5)).map((m, i) => (
               <Text key={i} size={13} color={colors.text2} numberOfLines={1}>
@@ -558,7 +710,12 @@ function ImportGroup() {
               </Text>
             ))}
             {missing.length > 5 ? (
-              <Press onPress={() => setShowMissing(!showMissing)} feedback="tap" scaleTo={0.97} style={{ alignSelf: "flex-start", paddingVertical: 6 }}>
+              <Press
+                onPress={() => setShowMissing(!showMissing)}
+                feedback="tap"
+                scaleTo={0.97}
+                style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+              >
                 <Text size={13} weight={600} color={colors.text2}>
                   {showMissing ? "Show fewer" : `Show all ${missing.length.toLocaleString()}`}
                 </Text>
@@ -568,5 +725,40 @@ function ImportGroup() {
         </>
       ) : null}
     </Group>
+  );
+}
+
+/** Whether links to this server's songs, playlists and profiles open here (Android asks the person). */
+function LinksRow() {
+  const [on, setOn] = useState(() => Native.linksEnabled());
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (st) => st === "active" && setOn(Native.linksEnabled()));
+    return () => sub.remove();
+  }, []);
+  const host = serverOrigin()?.replace(/^https?:\/\//, "") ?? "your server";
+  return (
+    <Row
+      title="Open Harmoni links here"
+      note={
+        on
+          ? `Links to songs, playlists and profiles on ${host} open in this app.`
+          : `Links people send you open in the browser. Turn on links for ${host} so they open here.`
+      }
+    >
+      {on ? <Icon name="check" size={20} color={colors.tint} /> : <SmallButton label="Turn on" onPress={() => Native.openLinkSettings()} />}
+    </Row>
+  );
+}
+
+function KvSwitch({ k, initial }: { k: string; initial: boolean }) {
+  const [on, setOn] = useState(() => kv.get(k, initial));
+  return (
+    <Switch
+      value={on}
+      onChange={(v) => {
+        setOn(v);
+        kv.set(k, v);
+      }}
+    />
   );
 }

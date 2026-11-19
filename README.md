@@ -2,7 +2,7 @@
 
 A native Android app for [Harmoni](../harmoni-next) servers, built with React Native (Expo SDK 58) and a local Kotlin module for playback. It works with any Harmoni server that supports app sign-in (OAuth): you type the server's address, sign in on the server's own page in a Custom Tab, and come back signed in.
 
-It does everything the web app does (Home, Search, Library, Liked Songs, Recently Played, playlists, albums, artists, Spices and the seed picker, synced lyrics, the queue, autoplay, Harmoni Link, invites, Apple Music import, account settings), plus things only an app can:
+It does everything the web app does (Home, Search, Library, Liked Songs, Recently Played, your Daily Spice, playlists and sharing them, albums, artists, Spices and the seed picker, profiles and following, people in search, song links, synced lyrics, the queue, autoplay, Harmoni Link, invites, Apple Music import, account settings), plus things only an app can:
 
 - **Background playback** with a Media3 `MediaSessionService`: notification, lock screen and Bluetooth controls, a heart button in the media controls, headset buttons, audio focus, and pausing when headphones come out.
 - **Downloads** for offline listening (songs, albums, playlists, Spices, or everything you like), stored in Media3's download cache, so playback finds them automatically.
@@ -12,6 +12,8 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 - **Haptics** throughout, using Android's own haptic constants.
 - **Sleep timer** (minutes, or "end of this song"), **crossfade** (0–12 s, equal-power like the web), smooth play/pause, and the phone's **equalizer**.
 - Resumes where you left off after the app is closed or the phone restarts.
+- **A backdrop that moves with the music.** `BassMeter` sits between ExoPlayer's audio renderer and the sink, low-passes each decoded buffer and lines it up with what's coming out of the speaker (no microphone permission, unlike `Visualizer`). Now Playing reads the next half second at a time and plays it out on the UI thread.
+- **Links open in the app.** `https://<server>/u/…`, `/song/…`, `/playlist/…?key=…`, `/spice/…`, `/album/…` and `/artist/…` open the matching screen (see [Links](#links)).
 
 ## Layout
 
@@ -23,8 +25,9 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 | `src/player/` | The queue, shuffle, autoplay, play/listen reporting and Link reporting. Native plays; this decides what. |
 | `src/link/` | Harmoni Link: the event stream, reports, commands, transfers. |
 | `src/now-playing/` | The full-screen player: backdrop, lyrics, queue, transport. |
+| `src/profile/` | Profiles (banners drawn with Skia from the person's colour, their fonts, editing in place), people, following and the playlist share sheet. |
 | `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, menus, collection screens, Spice art, and the design system. |
-| `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `Downloads`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
+| `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `BassMeter`, `Downloads`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
 
 Two things worth knowing about the design:
 
@@ -44,6 +47,23 @@ cd .. && bunx expo start --dev-client
 ```
 
 For a release build: `cd android && ./gradlew :app:assembleRelease`. It needs a signing config before it can be installed on a phone.
+
+## Links
+
+The app handles web links for the hosts in `LINK_HOSTS` (default `music.ceccun.com`; set it when building for another server). Android only opens them in the app without asking once the server proves the app is its own, with `/.well-known/assetlinks.json`:
+
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.ceccun.harmoni",
+    "sha256_cert_fingerprints": ["FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"]
+  }
+}]
+```
+
+That fingerprint is the shared debug key that builds are signed with until a signing key is set up (see Signing); use your own key's fingerprint once there is one (`keytool -list -v -keystore <keystore>`). Until the file is there, people can turn the links on in Settings → Open Harmoni links here, which opens Android's "Open by default" page for the app.
 
 ## CI: an APK on every push
 

@@ -8,6 +8,9 @@ export type Collection = ({ type: "playlist" } & PlaylistSummary) | ({ type: "sp
 
 export const usePlaylists = () => useQuery({ queryKey: ["playlists"], queryFn: Api.playlists });
 export const useSpices = () => useQuery({ queryKey: ["spices"], queryFn: Api.spices });
+/** Other people's playlists shared with you. Older servers don't have them. */
+export const useSharedPlaylists = () =>
+  useQuery({ queryKey: ["playlists", "shared"], queryFn: () => Api.sharedPlaylists().catch(() => []) });
 
 export function sortCollections(playlists: PlaylistSummary[] = [], spices: SpiceCard[] = []): Collection[] {
   return [...playlists.map((p) => ({ type: "playlist" as const, ...p })), ...spices.map((s) => ({ type: "spice" as const, ...s }))].sort(

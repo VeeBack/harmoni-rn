@@ -1,9 +1,10 @@
 import MaskedViewBase from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type TextLayoutEvent, type ViewProps } from "react-native";
+import { ScrollView, StyleSheet, View, useWindowDimensions, type TextLayoutEvent, type ViewProps } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  cancelAnimation,
   Easing,
   runOnJS,
   useAnimatedStyle,
@@ -11,7 +12,9 @@ import Animated, {
   useSharedValue,
   withDelay,
   withRepeat,
+  withDecay,
   withSequence,
+  withSpring,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
@@ -34,7 +37,6 @@ import { buildTimeline, type TimelineEntry } from "./timeline";
 
 const MaskedView = MaskedViewBase as unknown as (p: ViewProps & { maskElement: ReactNode; children: ReactNode }) => ReactNode;
 
-const GLIDE = Easing.bezier(0.2, 0.9, 0.25, 1.04);
 const SOFT = Easing.bezier(0.2, 0.7, 0.2, 1);
 const ANCHOR = 0.42;
 const DIM = "rgba(255,255,255,0.42)";
@@ -116,42 +118,80 @@ export function SyncedLyrics({ lyrics, durationMs }: { lyrics: LyricsData; durat
   useEffect(() => () => cancelAnimationFrame(pending.current), []);
 
   const [viewport, setViewport] = useState(0);
-  const shift = (offsets.current[Math.max(0, active)] ?? 0) - viewport * ANCHOR;
+  // Scrolling by hand moves the whole column (one transform), lifts the dimming and holds
+  // the lines still; a flick carries on and rubber-bands at the ends. A few seconds after the
+  // last touch it glides back to the line being sung.
+  // Where the column is held while scrolling by hand (null: following the song).
+  const [held, setHeld] = useState<number | null>(null);
+  const scrolling = held !== null;
+  const liveShift = (offsets.current[Math.max(0, active)] ?? 0) - viewport * ANCHOR;
+  const shift = held ?? liveShift;
   void layoutVersion;
 
-  // Scrolling by hand moves the whole column (one transform) and lifts the dimming;
-  // three seconds after the last touch it glides back to the current line.
   const manual = useSharedValue(0);
   const startManual = useSharedValue(0);
-  const [scrolling, setScrolling] = useState(false);
+  const lastOffset = offsets.current[offsets.current.length - 1] ?? 0;
+  // How far the column can go from where it's held: the first line, or the last, at the anchor.
+  const lo = useSharedValue(0);
+  const hi = useSharedValue(0);
+  useEffect(() => {
+    lo.value = -viewport * ANCHOR - shift;
+    hi.value = lastOffset - viewport * ANCHOR - shift;
+  }, [viewport, shift, lastOffset, lo, hi]);
   const release = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settle = useCallback(() => {
     if (release.current) clearTimeout(release.current);
     release.current = setTimeout(() => {
-      setScrolling(false);
-      manual.value = withTiming(0, { duration: 900, easing: GLIDE });
-    }, 3000);
+      setHeld(null);
+      manual.value = withSpring(0, { duration: 900, dampingRatio: 0.9 });
+    }, 2800);
   }, [manual]);
+  const hold = () => {
+    if (release.current) clearTimeout(release.current);
+    if (held === null) setHeld(liveShift);
+  };
   useEffect(
     () => () => {
       if (release.current) clearTimeout(release.current);
     },
     [],
   );
-  const lastOffset = offsets.current[offsets.current.length - 1] ?? 0;
+  // Seeking from a line while scrolled: go straight back to it.
+  const backNow = useCallback(() => {
+    if (release.current) clearTimeout(release.current);
+    setHeld(null);
+    manual.value = withSpring(0, { duration: 800, dampingRatio: 0.9 });
+  }, [manual]);
+
+  const dragged = useSharedValue(false);
   const pan = Gesture.Pan()
-    .activeOffsetY([-8, 8])
+    .activeOffsetY([-6, 6])
     .onBegin(() => {
+      // A touch catches a flick that's still going.
+      cancelAnimation(manual);
       startManual.value = manual.value;
+      dragged.value = false;
     })
     .onStart(() => {
-      runOnJS(setScrolling)(true);
+      dragged.value = true;
+      runOnJS(hold)();
     })
     .onUpdate((e) => {
-      manual.value = Math.max(-viewport, Math.min(lastOffset + viewport * 0.5, startManual.value - e.translationY));
+      const v = startManual.value - e.translationY;
+      // Past the ends it follows at a third of the speed.
+      manual.value = v < lo.value ? lo.value - (lo.value - v) / 3 : v > hi.value ? hi.value + (v - hi.value) / 3 : v;
     })
-    .onEnd(() => {
-      runOnJS(settle)();
+    .onEnd((e) => {
+      manual.value = withDecay({
+        velocity: -e.velocityY,
+        deceleration: 0.997,
+        clamp: [lo.value, Math.max(lo.value, hi.value)],
+        rubberBandEffect: true,
+        rubberBandFactor: 0.7,
+      });
+    })
+    .onFinalize(() => {
+      if (dragged.value || manual.value !== 0) runOnJS(settle)();
     });
   const columnStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -manual.value }] }));
 
@@ -160,7 +200,18 @@ export function SyncedLyrics({ lyrics, durationMs }: { lyrics: LyricsData; durat
       <View style={{ flex: 1, overflow: "hidden" }} onLayout={(e) => setViewport(e.nativeEvent.layout.height)}>
         <Animated.View style={[styles.column, columnStyle]}>
           {timeline.map((entry, i) => (
-            <Line key={i} entry={entry} index={i} active={active} shift={shift} size={size} scrolling={scrolling} t={t} measure={measure} />
+            <Line
+              key={i}
+              entry={entry}
+              index={i}
+              active={active}
+              shift={shift}
+              size={size}
+              scrolling={scrolling}
+              t={t}
+              measure={measure}
+              onSeek={scrolling ? backNow : undefined}
+            />
           ))}
         </Animated.View>
       </View>
@@ -177,6 +228,7 @@ const Line = memo(function Line({
   scrolling,
   t,
   measure,
+  onSeek,
 }: {
   entry: TimelineEntry;
   index: number;
@@ -186,6 +238,7 @@ const Line = memo(function Line({
   scrolling: boolean;
   t: SharedValue<number>;
   measure: (i: number, y: number) => void;
+  onSeek?: () => void;
 }) {
   const d = Math.min(6, index - active);
   const isActive = d === 0;
@@ -195,14 +248,19 @@ const Line = memo(function Line({
 
   // The glide: lines below the current one leave a little later the further down
   // they are, so the block flows like a wave. Past lines go at once.
+  // Only a step forward ripples; a seek back or a long jump moves the lines together, so they never overlap.
+  const lastShift = useRef(shift);
   useEffect(() => {
-    const delay = d > 0 ? Math.min(d, 8) * 45 : 0;
-    ty.value = withDelay(delay, withTiming(-shift, { duration: 900, easing: GLIDE }));
-  }, [shift, d, ty]);
+    const step = shift - lastShift.current;
+    lastShift.current = shift;
+    const ripple = step > 0 && step < size * 6;
+    const delay = ripple && d > 0 ? Math.min(d, 8) * 40 : 0;
+    ty.value = withDelay(delay, withSpring(-shift, { duration: ripple ? 820 : 700, dampingRatio: ripple ? 0.8 : 0.92 }));
+  }, [shift, d, ty, size]);
 
   useEffect(() => {
     let o = isActive ? 1 : d > 0 ? Math.max(0.12, Math.min(0.42, 0.42 - d * 0.07)) : 0.16;
-    if (scrolling && !isActive) o = 0.6;
+    if (scrolling && !isActive) o = 0.62;
     if (entry.kind === "gap" && !isActive) o = 0;
     op.value = withTiming(o, { duration: scrolling ? 300 : 600, easing: SOFT });
     sc.value = withTiming(isActive ? 1 : 0.97, { duration: 600, easing: SOFT });
@@ -213,9 +271,30 @@ const Line = memo(function Line({
     transform: [{ translateY: ty.value }, { scale: sc.value }],
   }));
 
+  // A tap seeks to the line; any movement makes it a scroll instead (the column's pan).
+  const pressed = useSharedValue(0);
+  const seek = () => {
+    haptic.tick();
+    player.seek(entry.start);
+    onSeek?.();
+  };
+  const tap = Gesture.Tap()
+    .maxDistance(10)
+    .maxDuration(600)
+    .onBegin(() => {
+      pressed.value = withTiming(1, { duration: 90 });
+    })
+    .onEnd((_e, ok) => {
+      if (ok) runOnJS(seek)();
+    })
+    .onFinalize(() => {
+      pressed.value = withTiming(0, { duration: 200 });
+    });
+  const pressStyle = useAnimatedStyle(() => ({ opacity: 1 - 0.25 * pressed.value }));
+
   // Blur like the web: upcoming lines a little more the further away, past lines a fixed amount.
   // Only lines near the current one blur (the rest are faded out anyway).
-  const blur = scrolling || isActive || Math.abs(index - active) > 7 ? 0 : d > 0 ? Math.min(d, 4) * 1.1 : 2.5;
+  const blur = scrolling || isActive || index - active > 4 || active - index > 2 ? 0 : d > 0 ? Math.min(d, 3) * 0.9 : 2;
 
   return (
     <View collapsable={false} onLayout={(e) => measure(index, e.nativeEvent.layout.y)}>
@@ -223,26 +302,27 @@ const Line = memo(function Line({
         {entry.kind === "gap" ? (
           <Gap entry={entry} size={size} active={isActive} t={t} />
         ) : (
-          <Pressable
-            onPress={() => {
-              haptic.tick();
-              player.seek(entry.start);
-            }}
-            style={({ pressed }) => ({ paddingVertical: size * 0.42, opacity: pressed ? 0.75 : 1 })}
-          >
-            {isActive ? (
-              <SweepText entry={entry} size={size} t={t} />
-            ) : (
-              <Text size={size} weight={700} color="#fff" style={{ lineHeight: size * 1.2, letterSpacing: -size * 0.02 }}>
-                {entry.text}
-              </Text>
-            )}
-            {entry.romanized ? (
-              <Text size={size * 0.42} weight={600} color="rgba(255,255,255,0.72)" style={{ marginTop: size * 0.25, lineHeight: size * 0.56 }}>
-                {entry.romanized}
-              </Text>
-            ) : null}
-          </Pressable>
+          <GestureDetector gesture={tap}>
+            <Animated.View style={[{ paddingVertical: size * 0.42 }, pressStyle]}>
+              {isActive ? (
+                <SweepText entry={entry} size={size} t={t} />
+              ) : (
+                <Text size={size} weight={700} color="#fff" style={{ lineHeight: size * 1.2, letterSpacing: -size * 0.02 }}>
+                  {entry.text}
+                </Text>
+              )}
+              {entry.romanized ? (
+                <Text
+                  size={size * 0.42}
+                  weight={600}
+                  color="rgba(255,255,255,0.72)"
+                  style={{ marginTop: size * 0.25, lineHeight: size * 0.56 }}
+                >
+                  {entry.romanized}
+                </Text>
+              ) : null}
+            </Animated.View>
+          </GestureDetector>
         )}
       </Animated.View>
     </View>
@@ -280,7 +360,9 @@ function SweepText({ entry, size, t }: { entry: Extract<TimelineEntry, { kind: "
       at += l.text.length;
       return r;
     });
-    setRows((prev) => (prev.length === next.length && prev.every((p, i) => p.width === next[i].width && p.from === next[i].from) ? prev : next));
+    setRows((prev) =>
+      prev.length === next.length && prev.every((p, i) => p.width === next[i].width && p.from === next[i].from) ? prev : next,
+    );
   }, []);
 
   const textStyle = { lineHeight: size * 1.2, letterSpacing: -size * 0.02 };
@@ -347,7 +429,17 @@ function RowMask({ row, words, t, feather }: { row: Row; words: SharedValue<Word
   );
 }
 
-function Gap({ entry, size, active, t }: { entry: Extract<TimelineEntry, { kind: "gap" }>; size: number; active: boolean; t: SharedValue<number> }) {
+function Gap({
+  entry,
+  size,
+  active,
+  t,
+}: {
+  entry: Extract<TimelineEntry, { kind: "gap" }>;
+  size: number;
+  active: boolean;
+  t: SharedValue<number>;
+}) {
   return (
     <View style={{ flexDirection: "row", gap: size * 0.45, paddingVertical: size * 0.6, paddingLeft: size * 0.08 }}>
       {[0, 1, 2].map((i) => (
@@ -357,7 +449,21 @@ function Gap({ entry, size, active, t }: { entry: Extract<TimelineEntry, { kind:
   );
 }
 
-function Dot({ i, size, start, end, t, active }: { i: number; size: number; start: number; end: number; t: SharedValue<number>; active: boolean }) {
+function Dot({
+  i,
+  size,
+  start,
+  end,
+  t,
+  active,
+}: {
+  i: number;
+  size: number;
+  start: number;
+  end: number;
+  t: SharedValue<number>;
+  active: boolean;
+}) {
   const breathe = useSharedValue(1);
   const on = useSharedValue(active ? 1 : 0);
   useEffect(() => {
@@ -368,7 +474,14 @@ function Dot({ i, size, start, end, t, active }: { i: number; size: number; star
     }
     breathe.value = withDelay(
       i * 120,
-      withRepeat(withSequence(withTiming(1.18, { duration: 1300, easing: Easing.inOut(Easing.ease) }), withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.ease) })), -1, false),
+      withRepeat(
+        withSequence(
+          withTiming(1.18, { duration: 1300, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      ),
     );
   }, [active, breathe, on, i]);
   const style = useAnimatedStyle(() => {

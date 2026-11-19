@@ -51,7 +51,16 @@
             "node_modules/@expo-google-fonts/outfit/500Medium/Outfit_500Medium.ttf",
             "node_modules/@expo-google-fonts/outfit/600SemiBold/Outfit_600SemiBold.ttf",
             "node_modules/@expo-google-fonts/outfit/700Bold/Outfit_700Bold.ttf",
-            "node_modules/@expo-google-fonts/outfit/800ExtraBold/Outfit_800ExtraBold.ttf"
+            "node_modules/@expo-google-fonts/outfit/800ExtraBold/Outfit_800ExtraBold.ttf",
+            "node_modules/@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf",
+            "node_modules/@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf",
+            "node_modules/@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf",
+            "node_modules/@expo-google-fonts/bricolage-grotesque/700Bold/BricolageGrotesque_700Bold.ttf",
+            "node_modules/@expo-google-fonts/nunito/800ExtraBold/Nunito_800ExtraBold.ttf",
+            "node_modules/@expo-google-fonts/jetbrains-mono/700Bold/JetBrainsMono_700Bold.ttf",
+            "node_modules/@expo-google-fonts/bebas-neue/400Regular/BebasNeue_400Regular.ttf",
+            "node_modules/@expo-google-fonts/caveat/700Bold/Caveat_700Bold.ttf",
+            "node_modules/@expo-google-fonts/silkscreen/400Regular/Silkscreen_400Regular.ttf"
           ]
         }
       ]
