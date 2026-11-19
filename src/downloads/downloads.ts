@@ -36,30 +36,45 @@ export const useDownloads = create<DownloadsStore>((set) => ({
   },
 }));
 
-Native.addListener("onDownload", (e: DownloadEvent) => {
+// Per-song events arrive in bursts (a big playlist sends thousands): apply them in one go every 200 ms.
+let buffered: DownloadEvent[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flush() {
+  flushTimer = null;
+  const events = buffered;
+  buffered = [];
+  if (!events.length) return;
   useDownloads.setState((s) => {
     const items = { ...s.items };
-    if (e.state === "removed") {
-      delete items[e.id];
-      return { items };
+    for (const e of events) {
+      if (e.state === "removed") {
+        delete items[e.id];
+        continue;
+      }
+      const prev = items[e.id];
+      let song = prev?.song ?? null;
+      if (e.song) {
+        try {
+          song = JSON.parse(e.song);
+        } catch {}
+      }
+      items[e.id] = {
+        id: e.id,
+        state: e.state,
+        percent: e.percent ?? prev?.percent ?? 0,
+        bytes: e.bytes ?? prev?.bytes ?? 0,
+        updatedAt: e.updatedAt ?? Date.now(),
+        song,
+      };
     }
-    const prev = items[e.id];
-    let song = prev?.song ?? null;
-    if (e.song) {
-      try {
-        song = JSON.parse(e.song);
-      } catch {}
-    }
-    items[e.id] = {
-      id: e.id,
-      state: e.state,
-      percent: e.percent ?? prev?.percent ?? 0,
-      bytes: e.bytes ?? prev?.bytes ?? 0,
-      updatedAt: e.updatedAt ?? Date.now(),
-      song,
-    };
     return { items };
   });
+}
+
+Native.addListener("onDownload", (e: DownloadEvent) => {
+  buffered.push(e);
+  if (!flushTimer) flushTimer = setTimeout(flush, 200);
 });
 
 Native.addListener("onTick", (t) => {
@@ -99,7 +114,10 @@ export function download(songs: Song[]) {
     }
     return { items };
   });
-  Native.download(JSON.stringify(fresh));
+  // Hand them over in chunks so a huge playlist never builds one enormous string.
+  (async () => {
+    for (let i = 0; i < fresh.length; i += 1000) await Native.download(JSON.stringify(fresh.slice(i, i + 1000)));
+  })().catch(() => {});
   return fresh.length;
 }
 
@@ -108,7 +126,10 @@ export function removeDownload(id: string) {
 }
 
 export function removeDownloads(ids: string[]) {
-  for (const id of ids) Native.removeDownload(id);
+  const items = useDownloads.getState().items;
+  const mine = ids.filter((id) => items[id]);
+  for (let i = 0; i < mine.length; i += 2000) Native.removeDownloads(JSON.stringify(mine.slice(i, i + 2000))).catch(() => {});
+  return mine.length;
 }
 
 export function removeAllDownloads() {

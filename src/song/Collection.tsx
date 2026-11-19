@@ -462,14 +462,7 @@ function Actions({
         },
       ],
     });
-  const onDownload = async () => {
-    if (dl.state === "none") {
-      const n = download(songs);
-      toast(
-        n === 1 ? "Saving 1 song for offline" : `Saving ${n} songs for offline`,
-      );
-      return;
-    }
+  const askRemove = async () => {
     const yes = await confirm({
       title: "Remove downloads?",
       note: `The ${plural(dl.saved + dl.saving, "song")} from ${title} saved on this phone will be removed. You can download them again any time.`,
@@ -477,6 +470,24 @@ function Actions({
       danger: true,
     });
     if (yes) removeDownloads(songs.map((s) => s.id));
+  };
+  // Tap: download whatever isn't saved yet. Only a fully saved list offers to remove.
+  const onDownload = () => {
+    if (dl.state === "all") return askRemove();
+    const n = download(songs);
+    if (n === 0) toast(dl.saving ? "Already saving these" : "Already on this phone");
+    else toast(n === 1 ? "Saving 1 song for offline" : `Saving ${n.toLocaleString()} songs for offline`);
+  };
+  // Long press: remove what's saved, even partway.
+  const onDownloadLong = () => {
+    if (dl.saved + dl.saving === 0) return;
+    openMenu({
+      label: "Downloads",
+      items: [
+        ...(dl.state !== "all" ? [{ label: "Download the rest", icon: "download" as const, onPress: onDownload }] : []),
+        { label: `Remove ${plural(dl.saved + dl.saving, "download")}`, icon: "trash" as const, danger: true, onPress: askRemove },
+      ],
+    });
   };
   const has = songs.length > 0;
   return (
@@ -523,6 +534,7 @@ function Actions({
                     : "Download"
               }
               onPress={onDownload}
+              onLongPress={onDownloadLong}
             >
               {dl.saving > 0 ? (
                 <Spinner size={20} color={colors.accent} />

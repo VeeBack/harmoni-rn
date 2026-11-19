@@ -666,12 +666,23 @@ class HarmoniPlayerModule : Module() {
 
     // --- downloads ---
 
-    AsyncFunction("download") { json: String ->
-      val a = JSONArray(json)
-      for (i in 0 until a.length()) Downloads.add(context, a.getJSONObject(i))
+    AsyncFunction("download") { json: String, promise: Promise ->
+      Core.io.execute {
+        val a = JSONArray(json)
+        runCatching { Downloads.addAll(context, (0 until a.length()).map { a.getJSONObject(it) }) }
+        promise.resolve(null)
+      }
     }
 
     AsyncFunction("removeDownload") { id: String -> Downloads.remove(context, id) }
+
+    AsyncFunction("removeDownloads") { json: String, promise: Promise ->
+      Core.io.execute {
+        val a = JSONArray(json)
+        for (i in 0 until a.length()) runCatching { Downloads.manager.removeDownload(a.getString(i)) }
+        promise.resolve(null)
+      }
+    }
 
     AsyncFunction("removeAllDownloads") { Downloads.removeAll(context) }
 

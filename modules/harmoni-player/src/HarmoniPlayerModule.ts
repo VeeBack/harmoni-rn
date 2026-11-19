@@ -111,6 +111,7 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
 
   download(json: string): Promise<void>;
   removeDownload(id: string): Promise<void>;
+  removeDownloads(json: string): Promise<void>;
   removeAllDownloads(): Promise<void>;
   getDownloads(): Promise<string>;
   getDownloadSize(): Promise<number>;
