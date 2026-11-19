@@ -130,6 +130,10 @@ object Core {
     return item.buildUpon().setUri(playUri(item.mediaId)).setCustomCacheKey(item.mediaId).build()
   }
 
+  /** YouTube Music artwork URLs carry their size; ask for a bigger one. */
+  fun sizedArtwork(url: String, px: Int): String =
+    Regex("=w(\\d+)-h(\\d+)").find(url)?.let { m -> if (m.groupValues[1].toInt() < px) url.replace(m.value, "=w$px-h$px") else url } ?: url
+
   fun songJson(item: MediaItem?): String? = item?.mediaMetadata?.extras?.getString("song")
 
   // --- likes, for the notification's heart ---
