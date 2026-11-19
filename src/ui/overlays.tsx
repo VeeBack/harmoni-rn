@@ -168,7 +168,7 @@ function DialogHost() {
               returnKeyType="done"
               style={{
                 height: 48,
-                paddingHorizontal: 16,
+                paddingHorizontal: 20,
                 borderRadius: radius.md,
                 borderWidth: 1,
                 borderColor: colors.borderStrong,
@@ -379,7 +379,7 @@ function MenuRow({ item, onPress }: { item: Exclude<MenuItem, "divider">; onPres
       android_ripple={{ color: "rgba(255,255,255,0.08)", foreground: true }}
       style={({ pressed }) => ({
         minHeight: 52,
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         flexDirection: "row",
         alignItems: "center",
         gap: 14,

@@ -54,13 +54,14 @@ export default function Library() {
   return (
     <Screen
       tab="(library)"
+      title="Library"
+      large
       refreshing={playlists.isRefetching}
       onRefresh={() => {
         playlists.refetch();
         spices.refetch();
       }}
     >
-      <PageTitle>Library</PageTitle>
       <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: colors.border }}>
         <Row icon="heart" label="Liked Songs" onPress={() => router.push("/liked")} />
         <Row icon="history" label="Recently Played" onPress={() => router.push("/recent")} />

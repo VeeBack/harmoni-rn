@@ -1,8 +1,9 @@
 import { type ReactNode } from "react";
 import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 
 import { haptic } from "@/lib/haptics";
+import { spring } from "./theme";
 
 const APressable = Animated.createAnimatedComponent(Pressable);
 
@@ -15,12 +16,22 @@ export interface PressProps extends Omit<PressableProps, "style" | "children"> {
   feedback?: keyof typeof haptic | false;
   ripple?: boolean | string;
   rippleBorderless?: boolean;
+  /** Highlight with a fill while held (rows), instead of or as well as shrinking. */
+  highlight?: string;
+  /** Dim while held (glyph buttons, like iOS). */
+  dim?: boolean;
 }
 
 /** A pressable that gives way under the finger, with a haptic on tap. */
-export function Press({ style, children, scaleTo = 0.96, feedback = "tap", ripple, rippleBorderless, onPressIn, onPressOut, onPress, onLongPress, ...rest }: PressProps) {
+export function Press({ style, children, scaleTo = 0.96, feedback = "tap", ripple, rippleBorderless, highlight, dim, onPressIn, onPressOut, onPress, onLongPress, ...rest }: PressProps) {
   const scale = useSharedValue(1);
-  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const held = useSharedValue(0);
+  const animated = useAnimatedStyle(() => {
+    const st: Record<string, unknown> = { transform: [{ scale: scale.value }] };
+    if (highlight) st.backgroundColor = interpolateColor(held.value, [0, 1], ["rgba(255,255,255,0)", highlight]);
+    if (dim) st.opacity = 1 - held.value * 0.55;
+    return st;
+  });
   return (
     <APressable
       {...rest}
@@ -30,11 +41,13 @@ export function Press({ style, children, scaleTo = 0.96, feedback = "tap", rippl
           : undefined
       }
       onPressIn={(e) => {
-        if (scaleTo !== 1) scale.value = withTiming(scaleTo, { duration: 90 });
+        if (scaleTo !== 1) scale.value = withSpring(scaleTo, spring.press);
+        if (highlight || dim) held.value = withTiming(1, { duration: 80 });
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        if (scaleTo !== 1) scale.value = withSpring(1, { damping: 14, stiffness: 260, mass: 0.6 });
+        if (scaleTo !== 1) scale.value = withSpring(1, spring.snappy);
+        if (highlight || dim) held.value = withTiming(0, { duration: 260 });
         onPressOut?.(e);
       }}
       onPress={

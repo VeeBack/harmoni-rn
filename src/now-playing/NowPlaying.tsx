@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
 import { BackHandler, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, FadeIn, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, interpolate, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import { sheetProgress } from "@/shell/sheet";
+import { miniArtFrame } from "@/shell/Dock";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
@@ -24,7 +26,7 @@ import { Icon, type IconName } from "@/ui/Icon";
 import { toast, useToastOffset } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
-import { layout } from "@/ui/theme";
+import { colors, layout, spring } from "@/ui/theme";
 import { FadeMask } from "@/ui/FadeMask";
 import { Backdrop } from "./Backdrop";
 import { openLinkPicker } from "./LinkPicker";
@@ -43,19 +45,22 @@ export function NowPlaying() {
   const [mounted, setMounted] = useState(false);
   const pb = usePlayback();
 
+  // Springs, so a flick carries its speed into the sheet (and the sheet into the flick).
+  const flick = useSharedValue(0);
   useEffect(() => {
     if (open) {
       setMounted(true);
-      y.value = height;
-      y.value = withTiming(0, { duration: 460, easing: OPEN });
+      if (y.value >= height - 1) y.value = height;
+      y.value = withSpring(0, { ...spring.smooth, duration: 560, velocity: flick.value });
       useToastOffset.setState({ bottom: 200 });
     } else {
-      y.value = withTiming(height, { duration: 280, easing: CLOSE }, (done) => {
+      y.value = withSpring(height, { duration: 460, dampingRatio: 1, velocity: flick.value, overshootClamping: true }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
       useToastOffset.setState({ bottom: layout.tabBar + layout.miniPlayer + 24 });
     }
-  }, [open, height, y]);
+    flick.value = 0;
+  }, [open, height, y, flick]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,20 +80,35 @@ export function NowPlaying() {
     .activeOffsetY(10)
     .failOffsetX([-24, 24])
     .onUpdate((e) => {
-      y.value = Math.max(0, e.translationY);
+      // Down follows the finger; up resists (rubber band).
+      y.value = e.translationY >= 0 ? e.translationY : -Math.sqrt(-e.translationY) * 3;
     })
     .onEnd((e) => {
-      if (e.translationY > 140 || (e.translationY > 40 && e.velocityY > 600)) {
+      if (e.translationY > 120 || (e.translationY > 24 && e.velocityY > 500)) {
+        flick.value = e.velocityY;
         runOnJS(haptic.gestureEnd)();
         runOnJS(closeNowPlaying)();
-      } else y.value = withSpring(0, { damping: 22, stiffness: 220, mass: 0.9 });
+      } else y.value = withSpring(0, { ...spring.bouncy, velocity: e.velocityY });
     });
 
-  const sheet = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  const sheet = useAnimatedStyle(() => {
+    const p = Math.max(0, Math.min(1, 1 - y.value / height));
+    return {
+      transform: [{ translateY: Math.max(-12, y.value) }],
+      borderTopLeftRadius: interpolate(p, [0.9, 1], [32, 0], "clamp"),
+      borderTopRightRadius: interpolate(p, [0.9, 1], [32, 0], "clamp"),
+    };
+  });
+  useAnimatedReaction(
+    () => y.value,
+    (v) => {
+      sheetProgress.value = Math.max(0, Math.min(1, 1 - v / height));
+    },
+  );
 
   if (!mounted || !pb.song) return null;
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 40 }, sheet]}>
+    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 40, overflow: "hidden" }, sheet]}>
       <StatusBar style="light" />
       <Sheet pan={pan} song={pb.song} />
     </Animated.View>
@@ -293,15 +313,40 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
   const { width, height } = useWindowDimensions();
   const pb = usePlayback();
   const art = Math.min(width - 56, height * 0.44, 520);
-  const scale = useSharedValue(0.9);
-  const opacity = useSharedValue(0);
+  const scale = useSharedValue(pb.playing ? 1 : 0.86);
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 400 });
-  }, [opacity]);
-  useEffect(() => {
-    scale.value = withTiming(pb.playing ? 1 : 0.86, { duration: 520, easing: Easing.bezier(0.2, 0.9, 0.25, 1.06) });
+    // Paused artwork sinks back a little, playing artwork springs forward (Apple Music).
+    scale.value = withSpring(pb.playing ? 1 : 0.86, pb.playing ? spring.bouncy : spring.smooth);
   }, [pb.playing, scale]);
-  const artStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
+
+  // The artwork grows out of the mini player's as the sheet rises, and shrinks back into it.
+  const ref = useRef<ComponentRef<typeof View>>(null);
+  const fx = useSharedValue(-1);
+  const fy = useSharedValue(0);
+  const fs = useSharedValue(art);
+  const measure = () => {
+    ref.current?.measureInWindow((x: number, y: number, w: number) => {
+      // Measured while the sheet may be moving: take its offset out.
+      const off = (1 - sheetProgress.value) * height;
+      fx.value = x;
+      fy.value = y - off;
+      fs.value = w;
+    });
+  };
+  const mini = { x: miniArtFrame.x, y: miniArtFrame.y, s: miniArtFrame.size };
+  const artStyle = useAnimatedStyle(() => {
+    const p = sheetProgress.value;
+    if (fx.value < 0 || mini.s <= 0 || p >= 1) return { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: scale.value }] };
+    const off = (1 - p) * height;
+    const dx = mini.x + (fx.value - mini.x) * p;
+    const dy = mini.y + (fy.value - mini.y) * p;
+    const ds = mini.s + (fs.value - mini.s) * p;
+    const k = ds / fs.value;
+    return {
+      transform: [{ translateX: dx - fx.value }, { translateY: dy - (fy.value + off) }, { scale: k * (scale.value + (1 - scale.value) * (1 - p)) }],
+    };
+  });
+  const artRadius = useAnimatedStyle(() => ({ borderRadius: interpolate(sheetProgress.value, [0, 1], [8 * (fs.value / Math.max(1, mini.s)), 12], "clamp") }));
 
   const featuredAt = song.artists.findIndex((a) => a.role === "featured");
   const go = (href: string) => {
@@ -312,26 +357,28 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
   return (
     <View style={{ flex: 1, paddingHorizontal: 28, paddingBottom: height * 0.02, alignItems: "center" }}>
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <Animated.View style={[{ elevation: 24, shadowColor: "#000", borderRadius: 10 }, artStyle]}>
+        <Animated.View ref={ref} collapsable={false} onLayout={measure} style={[{ elevation: 28, shadowColor: "#000", borderRadius: 12, transformOrigin: "0% 0%" }, artStyle]}>
           <Press onLongPress={() => openSongMenu(song, [], { fromNowPlaying: true })} feedback={false} scaleTo={1}>
-            <Artwork url={song.artworkUrl} size={art} radius={10} px={900} priority="high" />
+            <Animated.View style={[{ overflow: "hidden" }, artRadius]}>
+              <Artwork url={song.artworkUrl} size={art} radius={0} px={900} priority="high" />
+            </Animated.View>
           </Press>
         </Animated.View>
       </View>
       <View style={{ width: "100%", flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View style={{ flex: 1 }}>
-          <Text size={21} weight={600} color="#fff" numberOfLines={1} style={{ letterSpacing: -0.2 }}>
+          <Text variant="title3" color="#fff" numberOfLines={1}>
             {song.title}
           </Text>
-          <Text size={17} color={W(0.68)} numberOfLines={1}>
+          <Text variant="body" color={W(0.62)} numberOfLines={1}>
             {song.artists.map((a, i) => (
-              <Text key={i} size={17} color={W(0.68)} onPress={a.id ? () => go(`/artist/${a.id}`) : undefined}>
+              <Text key={i} variant="body" color={W(0.62)} onPress={a.id ? () => go(`/artist/${a.id}`) : undefined}>
                 {i > 0 ? (i === featuredAt ? " feat. " : ", ") : ""}
                 {a.name}
               </Text>
             ))}
             {song.album?.id ? (
-              <Text size={17} color={W(0.68)} onPress={() => go(`/album/${song.album!.id}`)}>
+              <Text variant="body" color={W(0.62)} onPress={() => go(`/album/${song.album!.id}`)}>
                 {" · "}
                 {song.album.title}
               </Text>

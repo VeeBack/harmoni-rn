@@ -18,6 +18,8 @@ import { searchFocus } from "@/shell/state";
 import { Button } from "@/ui/Button";
 import { EmptyState, PlayButton, Section, Skeleton } from "@/ui/bits";
 import { Screen } from "@/ui/Screen";
+import { Icon } from "@/ui/Icon";
+import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { colors, radius } from "@/ui/theme";
 
@@ -26,7 +28,7 @@ export default function Home() {
   const q = useQuery({ queryKey: ["home"], queryFn: Api.home });
   const data = q.data;
   return (
-    <Screen tab="(home)" refreshing={q.isRefetching} onRefresh={() => q.refetch()}>
+    <Screen tab="(home)" title="Home" large refreshing={q.isRefetching} onRefresh={() => q.refetch()}>
       {!data ? (
         q.isError ? (
           <View style={{ marginTop: 24 }}>
@@ -203,26 +205,26 @@ function Hero({ data, name, mix, fresh }: { data: HomeData; name?: string; mix?:
   const isCurrentList = songs.length > 0 && pb.queue.length === songs.length && sameList(pb.queue, songs);
   const playingThis = isCurrentList && pb.playing;
   return (
-    <View style={{ marginTop: 8, borderRadius: radius.xl, overflow: "hidden", backgroundColor: theme?.color ?? colors.surface2 }}>
+    <View style={{ marginTop: 4, borderRadius: 20, overflow: "hidden", backgroundColor: theme?.color ?? colors.surface2 }}>
       {art ? (
         <View style={StyleSheet.absoluteFill}>
           <Image source={{ uri: sized(art, 900) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} />
           <LinearGradient colors={["rgba(0,0,0,0)", theme?.color ?? colors.surface2]} locations={[0.1, 0.92]} style={StyleSheet.absoluteFill} />
         </View>
       ) : null}
-      <View style={{ paddingTop: art ? 160 : 40, paddingHorizontal: 22, paddingBottom: 22, gap: 8 }}>
-        <Text weight={500} color={inkMuted}>
+      <View style={{ paddingTop: art ? 190 : 44, paddingHorizontal: 20, paddingBottom: 20, gap: 6 }}>
+        <Text variant="caption2" weight={600} color={inkMuted} style={{ letterSpacing: 1.1, textTransform: "uppercase" }}>
           {eyebrow}
         </Text>
-        <Text size={32} weight={700} color={ink} style={{ letterSpacing: -0.96, lineHeight: 34 }}>
+        <Text variant="title1" color={ink}>
           {title}
         </Text>
         {text ? (
-          <Text color={inkMuted} style={{ lineHeight: 21 }}>
+          <Text variant="subhead" color={inkMuted} numberOfLines={2}>
             {text}
           </Text>
         ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 }}>
           {fresh ? (
             <Button
               label="Start searching"
@@ -234,14 +236,21 @@ function Hero({ data, name, mix, fresh }: { data: HomeData; name?: string; mix?:
             />
           ) : (
             <>
-              <PlayButton
-                playing={playingThis}
-                label={label}
-                bg={theme ? ink : colors.accent}
-                fg={theme ? theme.color : colors.accentInk}
+              <Press
                 onPress={() => (isCurrentList ? player.toggle() : player.play(songs, 0))}
-              />
-              <Text color={inkMuted}>{plural(songs.length, "song")}</Text>
+                feedback={playingThis ? "toggleOff" : "toggleOn"}
+                scaleTo={0.95}
+                accessibilityLabel={playingThis ? "Pause" : label}
+                style={{ height: 40, paddingLeft: 14, paddingRight: 18, borderRadius: 20, backgroundColor: theme ? ink : colors.accent, flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Icon name={playingThis ? "pause" : "play"} size={20} color={theme ? theme.color : colors.accentInk} />
+                <Text variant="subhead" weight={600} color={theme ? theme.color : colors.accentInk}>
+                  {playingThis ? "Pause" : "Play"}
+                </Text>
+              </Press>
+              <Text variant="footnote" color={inkMuted}>
+                {plural(songs.length, "song")}
+              </Text>
             </>
           )}
         </View>

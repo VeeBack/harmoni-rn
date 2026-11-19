@@ -548,7 +548,7 @@ function ImportGroup() {
       {missing.length ? (
         <>
           <Row title={`${missing.length.toLocaleString()} songs not found anywhere`} note="None of the music services had these, so they have no artwork. They stay in your library, and playing one still looks for it." />
-          <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 6 }}>
+          <View style={{ paddingHorizontal: 20, paddingBottom: 16, gap: 6 }}>
             {(showMissing ? missing : missing.slice(0, 5)).map((m, i) => (
               <Text key={i} size={13} color={colors.text2} numberOfLines={1}>
                 {m.title} · {m.artist}

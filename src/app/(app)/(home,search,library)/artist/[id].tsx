@@ -38,7 +38,7 @@ export default function ArtistScreen() {
       {a ? (
         <Animated.View entering={FadeIn.duration(250)}>
           <Hero a={a} />
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: 20 }}>
             <Body a={a} />
           </View>
         </Animated.View>
@@ -69,7 +69,7 @@ function Hero({ a }: { a: Artist }) {
   const meta = [a.fans ? `${compact(a.fans)} fans` : null, releases ? plural(releases, "release") : null].filter(Boolean).join(" · ");
   const current = !!pb.song && a.popular.some((s) => s.id === pb.song!.id);
   return (
-    <View style={{ minHeight: Math.max(300, Math.min(height * 0.46, 460)), justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 24, paddingTop: insets.top + TOPBAR, overflow: "hidden" }}>
+    <View style={{ minHeight: Math.max(300, Math.min(height * 0.46, 460)), justifyContent: "flex-end", paddingHorizontal: 20, paddingBottom: 24, paddingTop: insets.top + TOPBAR, overflow: "hidden" }}>
       {a.bannerUrl ? (
         <>
           <Image source={{ uri: a.bannerUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition={{ top: "30%" }} transition={300} />
@@ -211,7 +211,7 @@ function Body({ a }: { a: Artist }) {
 
       {a.related.length ? (
         <Section title="Fans also like">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 24 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 24 }}>
             {a.related.map((r) => (
               <Press key={r.id} onPress={() => router.push(`/artist/${r.id}`)} feedback="tap" scaleTo={0.96} style={{ width: 148, gap: 10, alignItems: "center" }}>
                 <Artwork url={sized(r.imageUrl, 450)} size={148} round fallback="user" />

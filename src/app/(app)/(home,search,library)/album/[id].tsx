@@ -45,15 +45,16 @@ export default function AlbumScreen() {
         a ? (
           <>
             {a.artists.map((ar, i) => (
-              <Text key={ar.id} size={13} weight={500} color={colors.text} onPress={() => router.push(`/artist/${ar.id}`)}>
+              <Text key={ar.id} variant="title3" weight={400} color={colors.tint} onPress={() => router.push(`/artist/${ar.id}`)}>
                 {i ? ", " : ""}
                 {ar.name}
               </Text>
             ))}
-            {year ? ` · ${year}` : ""}
           </>
         ) : undefined
       }
+      kindNote={year}
+      compact
       loadingNote={q.isLoading ? "Fetching the tracklist… the first visit can take a few seconds." : undefined}
       error={q.isError ? { title: "Album not found", body: "Harmoni only knows albums for artists and songs it has seen." } : null}
       footer={footer}

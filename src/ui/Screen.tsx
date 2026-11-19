@@ -1,6 +1,6 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { router, useNavigation } from "expo-router";
-import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
+import { BlurTargetView } from "expo-blur";
+import { router } from "expo-router";
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, type ComponentRef, type ReactNode, type RefObject } from "react";
 import { RefreshControl, StyleSheet, View, type ScrollViewProps } from "react-native";
 import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,83 +9,100 @@ import { registerScrollToTop } from "@/shell/state";
 import { TOPBAR, useContentBottom } from "@/shell/layout";
 import { useSession } from "@/state/session";
 import { Icon } from "./Icon";
-import { IconButton, Press } from "./Press";
+import { Material } from "./Material";
+import { Press } from "./Press";
 import { Text } from "./Text";
 import { colors } from "./theme";
 
-/** The phone top bar: wordmark (or back) on the left, avatar on the right, over a soft fade. */
+type Target = RefObject<ComponentRef<typeof View> | null>;
+/** The content behind floating chrome (nav bar, tab bar), for materials to blur. */
+export const BlurTargetContext = createContext<Target | null>(null);
+
+/**
+ * The navigation bar, iOS-style: clear at the top of the page; once content
+ * scrolls under it, a blurred material and hairline fade in and the inline title
+ * appears (the large title has scrolled away by then).
+ */
 export function TopBar({
   back,
   title,
   scrollY,
-  titleAt = 160,
+  titleAt = 44,
   center,
   right,
+  avatar = !back,
+  target,
+  alwaysSolid,
 }: {
   back?: boolean;
   title?: string;
   scrollY?: SharedValue<number>;
+  /** Scroll offset at which the inline title appears. */
   titleAt?: number;
   center?: ReactNode;
   right?: ReactNode;
+  avatar?: boolean;
+  target?: Target | null;
+  alwaysSolid?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const ctxTarget = useContext(BlurTargetContext);
+  const blurTarget = target ?? ctxTarget;
   const me = useSession((s) => s.me);
+  const barStyle = useAnimatedStyle(() => ({ opacity: alwaysSolid ? 1 : scrollY ? interpolate(scrollY.value, [0, 14], [0, 1], "clamp") : 0 }));
   const titleStyle = useAnimatedStyle(() => {
     if (!scrollY || !title) return { opacity: 0 };
     return {
-      opacity: interpolate(scrollY.value, [titleAt - 40, titleAt], [0, 1], "clamp"),
-      transform: [{ translateY: interpolate(scrollY.value, [titleAt - 40, titleAt], [6, 0], "clamp") }],
+      opacity: interpolate(scrollY.value, [titleAt - 12, titleAt + 6], [0, 1], "clamp"),
+      transform: [{ translateY: interpolate(scrollY.value, [titleAt - 12, titleAt + 6], [4, 0], "clamp") }],
     };
-  });
-  const wordStyle = useAnimatedStyle(() => {
-    if (!scrollY || !title) return { opacity: 1 };
-    return { opacity: interpolate(scrollY.value, [titleAt - 60, titleAt - 20], [1, 0], "clamp") };
   });
   return (
     <View pointerEvents="box-none" style={[styles.bar, { paddingTop: insets.top, height: TOPBAR + insets.top }]}>
-      <LinearGradient
-        pointerEvents="none"
-        colors={["rgba(18,18,18,0.98)", "rgba(18,18,18,0.95)", "rgba(18,18,18,0.75)", "rgba(18,18,18,0)"]}
-        locations={[0, 0.55, 0.78, 1]}
-        style={[StyleSheet.absoluteFill, { bottom: -28 }]}
-      />
-      {back ? (
-        <IconButton label="Back" onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))} size={40} style={{ marginLeft: -8 }}>
-          <Icon name="arrow-left" size={24} />
-        </IconButton>
-      ) : null}
-      {center ?? (
-        <View style={{ flex: 1, alignSelf: "stretch", justifyContent: "center" }}>
-          {back && title ? null : (
-            <Animated.View style={wordStyle}>
-              <Press feedback="tap" scaleTo={0.97} onPress={() => router.navigate("/")} style={{ alignSelf: "flex-start" }} accessibilityLabel="Harmoni, home">
-                <Text size={18} weight={600} style={{ letterSpacing: -0.2 }}>
-                  Harmoni
-                </Text>
-              </Press>
-            </Animated.View>
-          )}
-          {title ? (
-            <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: "center" }, titleStyle]} pointerEvents="none">
-              <Text size={17} weight={600} numberOfLines={1}>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, barStyle]}>
+        <Material target={blurTarget ?? undefined} />
+        <View style={styles.hairline} />
+      </Animated.View>
+      <View style={styles.side}>
+        {back ? (
+          <Press
+            onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            scaleTo={1}
+            dim
+            hitSlop={12}
+            style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+          >
+            <Icon name="chevron-left" size={26} color={colors.tint} />
+          </Press>
+        ) : null}
+      </View>
+      <View pointerEvents="box-none" style={styles.middle}>
+        {center ??
+          (title ? (
+            <Animated.View style={titleStyle} pointerEvents="none">
+              <Text variant="headline" numberOfLines={1} align="center">
                 {title}
               </Text>
             </Animated.View>
-          ) : null}
-        </View>
-      )}
-      {right}
-      <Press
-        onPress={() => router.navigate("/settings")}
-        accessibilityLabel="Settings"
-        scaleTo={0.9}
-        style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}
-      >
-        <Text weight={600} color={colors.accentInk}>
-          {me?.name?.trim()?.[0]?.toUpperCase() ?? "·"}
-        </Text>
-      </Press>
+          ) : null)}
+      </View>
+      <View style={[styles.side, { justifyContent: "flex-end", gap: 4 }]}>
+        {right}
+        {avatar ? (
+          <Press
+            onPress={() => router.navigate("/settings")}
+            accessibilityLabel="Settings"
+            scaleTo={0.9}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center", marginLeft: 6 }}
+          >
+            <Text variant="subhead" weight={600} color={colors.text}>
+              {me?.name?.trim()?.[0]?.toUpperCase() ?? "·"}
+            </Text>
+          </Press>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -94,13 +111,15 @@ export interface ScreenHandle {
   scrollToTop: () => void;
 }
 
-/** A scrolling page under the top bar and over the dock. */
+/** A scrolling page under the navigation bar and over the dock, with an optional large title. */
 export const Screen = forwardRef<
   ScreenHandle,
   {
     children: ReactNode;
     back?: boolean;
     title?: string;
+    /** Shows the title large at the top of the page (iOS large title); it moves into the bar on scroll. */
+    large?: boolean;
     titleAt?: number;
     tab?: string;
     refreshing?: boolean;
@@ -108,65 +127,80 @@ export const Screen = forwardRef<
     padded?: boolean;
     bleedTop?: boolean;
     topBar?: ReactNode;
+    right?: ReactNode;
     scrollY?: SharedValue<number>;
   } & Pick<ScrollViewProps, "keyboardShouldPersistTaps" | "onScrollBeginDrag">
->(function Screen({ children, back, title, titleAt, tab, refreshing, onRefresh, padded = true, bleedTop, topBar, scrollY: externalY, ...rest }, ref) {
+>(function Screen({ children, back, title, large, titleAt, tab, refreshing, onRefresh, padded = true, bleedTop, topBar, right, scrollY: externalY, ...rest }, ref) {
   const insets = useSafeAreaInsets();
   const bottom = useContentBottom();
   const scroll = useRef<Animated.ScrollView>(null);
+  const target = useRef<ComponentRef<typeof View>>(null);
   const ownY = useSharedValue(0);
   const y = externalY ?? ownY;
   const onScroll = useAnimatedScrollHandler((e) => {
     y.value = e.contentOffset.y;
   });
-  const nav = useNavigation();
   const toTop = () => scroll.current?.scrollTo({ y: 0, animated: true });
   useImperativeHandle(ref, () => ({ scrollToTop: toTop }));
   useEffect(() => {
     if (!tab) return;
-    const off = registerScrollToTop(tab, toTop);
-    return off;
+    return registerScrollToTop(tab, toTop);
   }, [tab]);
-  void nav;
+
+  // The large title shrinks a touch when pulled down past the top, like iOS.
+  const largeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(y.value, [-120, 0], [1.08, 1], "clamp") }],
+  }));
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Animated.ScrollView
-        ref={scroll}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        overScrollMode="never"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} progressViewOffset={insets.top + TOPBAR} tintColor={colors.accent} colors={[colors.accentInk]} progressBackgroundColor={colors.accent} />
-          ) : undefined
-        }
-        contentContainerStyle={{
-          paddingTop: bleedTop ? 0 : insets.top + TOPBAR + 4,
-          paddingBottom: bottom,
-          paddingHorizontal: padded ? 16 : 0,
-        }}
-        {...rest}
-      >
-        {children}
-      </Animated.ScrollView>
-      {topBar ?? <TopBar back={back} title={title} scrollY={y} titleAt={titleAt} />}
+      <BlurTargetContext.Provider value={target}>
+        <BlurTargetView ref={target} style={{ flex: 1, backgroundColor: colors.bg }}>
+          <Animated.ScrollView
+            ref={scroll}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} progressViewOffset={insets.top + TOPBAR} tintColor={colors.accent} colors={[colors.accentInk]} progressBackgroundColor={colors.accent} />
+              ) : undefined
+            }
+            contentContainerStyle={{
+              paddingTop: bleedTop ? 0 : insets.top + TOPBAR,
+              paddingBottom: bottom,
+              paddingHorizontal: padded ? 20 : 0,
+            }}
+            {...rest}
+          >
+            {large && title ? (
+              <Animated.View style={[{ transformOrigin: "left center", marginTop: 2, marginBottom: 8 }, largeStyle]}>
+                <Text variant="largeTitle">{title}</Text>
+              </Animated.View>
+            ) : null}
+            {children}
+          </Animated.ScrollView>
+        </BlurTargetView>
+        {topBar ?? <TopBar back={back} title={title} scrollY={y} titleAt={titleAt ?? (large ? 44 : 160)} right={right} target={target} />}
+      </BlurTargetContext.Provider>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  bar: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16 },
+  bar: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", paddingHorizontal: 20 },
+  hairline: { position: "absolute", left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.borderStrong },
+  side: { minWidth: 72, flexDirection: "row", alignItems: "center" },
+  middle: { flex: 1, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
 });
 
+/** A large title at the top of a page that doesn't use Screen's own. */
 export function PageTitle({ children, subtitle }: { children: string; subtitle?: string }) {
   return (
-    <View style={{ marginTop: 12, marginBottom: subtitle ? 20 : 4 }}>
-      <Text size={32} weight={700} style={{ letterSpacing: -0.64, lineHeight: 38 }}>
-        {children}
-      </Text>
+    <View style={{ marginTop: 2, marginBottom: subtitle ? 20 : 8 }}>
+      <Text variant="largeTitle">{children}</Text>
       {subtitle ? (
-        <Text color={colors.text2} style={{ marginTop: 4 }}>
+        <Text variant="subhead" color={colors.text2} style={{ marginTop: 4 }}>
           {subtitle}
         </Text>
       ) : null}

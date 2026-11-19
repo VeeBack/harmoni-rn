@@ -2,12 +2,15 @@ import * as Network from "expo-network";
 import Native from "harmoni-player";
 import { kv } from "@/lib/storage";
 import { Tabs } from "expo-router/js-tabs";
-import { useEffect } from "react";
+import { BlurTargetView } from "expo-blur";
+import { useEffect, useRef, type ComponentRef } from "react";
 import { View } from "react-native";
+import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
 
 import { link, useLinkPref } from "@/link/link";
 import { flushPendingListens, restorePlayer, setPlayerToast } from "@/player/player";
-import { Dock } from "@/shell/Dock";
+import { Dock, TabBarBridge } from "@/shell/Dock";
+import { sheetProgress } from "@/shell/sheet";
 import "@/player/remoteSession";
 import { NowPlaying } from "@/now-playing/NowPlaying";
 import { useLibrary } from "@/state/library";
@@ -49,16 +52,32 @@ export default function AppLayout() {
     link.setEnabled(linkOn);
   }, [linkOn]);
 
+  const target = useRef<ComponentRef<typeof View>>(null);
+  // While Now Playing rises, the app behind sinks back like a card (iOS sheet).
+  const stage = useAnimatedStyle(() => {
+    const p = sheetProgress.value;
+    return {
+      transform: [{ scale: interpolate(p, [0, 1], [1, 0.92], "clamp") }, { translateY: interpolate(p, [0, 1], [0, 18], "clamp") }],
+      borderRadius: interpolate(p, [0, 0.05, 1], [0, 18, 28], "clamp"),
+      opacity: interpolate(p, [0, 1], [1, 0.55], "clamp"),
+    };
+  });
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Tabs
-        tabBar={(props) => <Dock {...props} />}
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, animation: "shift", lazy: true }}
-      >
-        <Tabs.Screen name="(home)" options={{ title: "Home" }} />
-        <Tabs.Screen name="(search)" options={{ title: "Search" }} />
-        <Tabs.Screen name="(library)" options={{ title: "Library" }} />
-      </Tabs>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <Animated.View style={[{ flex: 1, overflow: "hidden", backgroundColor: colors.bg }, stage]}>
+        <BlurTargetView ref={target} style={{ flex: 1, backgroundColor: colors.bg }}>
+          <Tabs
+            tabBar={(props) => <TabBarBridge {...props} />}
+            screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, animation: "fade", lazy: true }}
+          >
+            <Tabs.Screen name="(home)" options={{ title: "Home" }} />
+            <Tabs.Screen name="(search)" options={{ title: "Search" }} />
+            <Tabs.Screen name="(library)" options={{ title: "Library" }} />
+          </Tabs>
+        </BlurTargetView>
+        <Dock target={target} />
+      </Animated.View>
       <NowPlaying />
     </View>
   );

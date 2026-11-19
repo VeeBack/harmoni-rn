@@ -1,7 +1,6 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, type ReactNode } from "react";
 import { View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from "react-native-reanimated";
 
 import { haptic } from "@/lib/haptics";
 import { Button } from "./Button";
@@ -11,20 +10,29 @@ import { Spinner } from "./Spinner";
 import { Text } from "./Text";
 import { colors, radius } from "./theme";
 
+/**
+ * A section, as in Apple Music: a bold title; when it leads somewhere the whole
+ * header is tappable and ends in a chevron.
+ */
 export function Section({ title, link, onLink, action, children, style }: { title: string; link?: string; onLink?: () => void; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const header = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}>
+      <Text variant="title2" numberOfLines={1} style={{ flexShrink: 1 }}>
+        {title}
+      </Text>
+      {onLink ? <Icon name="chevron-right" size={20} color={colors.text3} /> : null}
+    </View>
+  );
   return (
-    <View style={[{ marginTop: 32 }, style]}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
-        <Text size={18} weight={600} style={{ letterSpacing: -0.18, flexShrink: 1 }} numberOfLines={1}>
-          {title}
-        </Text>
-        {link && onLink ? (
-          <Press onPress={onLink} feedback="tap" scaleTo={0.95} hitSlop={10}>
-            <Text size={13} weight={500} color={colors.text2}>
-              {link}
-            </Text>
+    <View style={[{ marginTop: 36 }, style]}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, minHeight: 32 }}>
+        {onLink ? (
+          <Press onPress={onLink} feedback="tap" scaleTo={1} dim hitSlop={8} accessibilityRole="button" accessibilityLabel={link ? `${title}, ${link}` : title} style={{ flexShrink: 1 }}>
+            {header}
           </Press>
-        ) : null}
+        ) : (
+          header
+        )}
         {action}
       </View>
       {children}
@@ -32,61 +40,48 @@ export function Section({ title, link, onLink, action, children, style }: { titl
   );
 }
 
+/** Nothing here yet: a quiet, centred note with an optional button (HIG empty state). */
 export function EmptyState({ title, body, action, onAction, icon }: { title: string; body?: string; action?: string; onAction?: () => void; icon?: IconName }) {
   return (
-    <View
-      style={{
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderStyle: "dashed",
-        borderColor: colors.borderStrong,
-        borderRadius: radius.lg,
-        paddingVertical: 28,
-        paddingHorizontal: 22,
-        gap: 12,
-        alignItems: "flex-start",
-      }}
-    >
-      {icon ? <Icon name={icon} size={28} color={colors.text3} /> : null}
-      <Text size={18} weight={600}>
+    <View style={{ alignItems: "center", paddingVertical: 36, paddingHorizontal: 24, gap: 8 }}>
+      {icon ? (
+        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surface2, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+          <Icon name={icon} size={30} color={colors.text2} />
+        </View>
+      ) : null}
+      <Text variant="title3" align="center">
         {title}
       </Text>
       {body ? (
-        <Text color={colors.text2} style={{ lineHeight: 21 }}>
+        <Text variant="subhead" color={colors.text2} align="center" style={{ maxWidth: 320 }}>
           {body}
         </Text>
       ) : null}
-      {action && onAction ? <Button label={action} onPress={onAction} size="md" style={{ marginTop: 4 }} /> : null}
+      {action && onAction ? <Button label={action} onPress={onAction} size="md" style={{ marginTop: 12 }} /> : null}
     </View>
   );
 }
 
-/** Shimmering placeholder, like the web's skeletons. */
-export function Skeleton({ width = "100%", height = 14, radius: r = 8, style, round }: { width?: DimensionValue; height?: DimensionValue; radius?: number; style?: StyleProp<ViewStyle>; round?: boolean }) {
-  const x = useSharedValue(0);
+/** A placeholder in the shape of what's coming, breathing softly (iOS redaction). */
+export function Skeleton({ width = "100%", height = 14, radius: r = 8, style, round, delay = 0 }: { width?: DimensionValue; height?: DimensionValue; radius?: number; style?: StyleProp<ViewStyle>; round?: boolean; delay?: number }) {
+  const o = useSharedValue(0.5);
   useEffect(() => {
-    x.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.linear }), -1, false);
-  }, [x]);
-  const anim = useAnimatedStyle(() => ({ transform: [{ translateX: `${-100 + x.value * 200}%` as unknown as number }] }));
-  return (
-    <View style={[{ width, height, borderRadius: round ? 9999 : r, backgroundColor: colors.surface2, overflow: "hidden" }, style]}>
-      <Animated.View style={[{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }, anim]}>
-        <LinearGradient colors={[colors.surface2, colors.surface3, colors.surface2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1 }} />
-      </Animated.View>
-    </View>
-  );
+    o.value = withDelay(delay, withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true));
+  }, [o, delay]);
+  const anim = useAnimatedStyle(() => ({ opacity: 0.45 + o.value * 0.4 }));
+  return <Animated.View style={[{ width, height, borderRadius: round ? 9999 : r, backgroundColor: colors.surface2 }, anim, style]} />;
 }
 
 export function SongRowsSkeleton({ n = 5 }: { n?: number }) {
   const widths = ["46%", "62%", "38%", "54%", "44%", "58%", "40%"] as const;
   return (
-    <View style={{ gap: 14 }}>
+    <View style={{ gap: 16 }}>
       {Array.from({ length: n }, (_, i) => (
-        <View key={i} style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          <Skeleton width={44} height={44} />
+        <View key={i} style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
+          <Skeleton width={48} height={48} radius={6} delay={i * 80} />
           <View style={{ flex: 1, gap: 8 }}>
-            <Skeleton width={widths[i % widths.length]} height={13} />
-            <Skeleton width="30%" height={11} />
+            <Skeleton width={widths[i % widths.length]} height={14} delay={i * 80} />
+            <Skeleton width="30%" height={12} delay={i * 80} />
           </View>
         </View>
       ))}

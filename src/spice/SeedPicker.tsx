@@ -211,7 +211,7 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
           disabled={!picked.length || busy}
           feedback="confirm"
           scaleTo={0.95}
-          style={{ height: 44, paddingHorizontal: 16, borderRadius: 999, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", gap: 8, opacity: !picked.length || busy ? 0.4 : 1 }}
+          style={{ height: 44, paddingHorizontal: 20, borderRadius: 999, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", gap: 8, opacity: !picked.length || busy ? 0.4 : 1 }}
         >
           {busy ? <Spinner size={18} color={colors.accentInk} /> : <Icon name="spice" size={18} color={colors.accentInk} />}
           <Text weight={600} color={colors.accentInk}>

@@ -2,6 +2,10 @@
 // Basil by Craftwork, CC BY 4.0: https://www.figma.com/community/file/931906394678748246
 // Font Awesome 6 Solid by Dave Gandy, CC BY 4.0: https://github.com/FortAwesome/Font-Awesome
 export const ICONS = {
+ "chevron-left": {"body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2.2\" d=\"M15 4.5L7.5 12l7.5 7.5\"/>", "width": 24, "height": 24},
+ "chevron-right": {"body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2.2\" d=\"M9 4.5l7.5 7.5L9 19.5\"/>", "width": 24, "height": 24},
+ "chevron-down": {"body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2.2\" d=\"M4.5 9l7.5 7.5L19.5 9\"/>", "width": 24, "height": 24},
+ "ellipsis": {"body": "<circle cx=\"5\" cy=\"12\" r=\"1.9\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"1.9\" fill=\"currentColor\"/><circle cx=\"19\" cy=\"12\" r=\"1.9\" fill=\"currentColor\"/>", "width": 24, "height": 24},
  "link": {
   "body": "<path fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M10.5 13.5a3.8 3.8 0 0 0 5.4 0l3-3a3.8 3.8 0 0 0-5.4-5.4l-1.1 1.1m-.9 4.3a3.8 3.8 0 0 0-5.4 0l-3 3a3.8 3.8 0 0 0 5.4 5.4l1.1-1.1\"/>",
   "width": 24,

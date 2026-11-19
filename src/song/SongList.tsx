@@ -27,7 +27,7 @@ export function SongList({ songs, numbered, single, extras }: { songs: Song[]; n
   return (
     <View>
       {songs.map((s, i) => (
-        <SongRow key={`${s.id}:${i}`} song={s} index={i} numbered={numbered} onPress={onPress} onMore={onMore} />
+        <SongRow key={`${s.id}:${i}`} song={s} index={i} numbered={numbered} onPress={onPress} onMore={onMore} last={i === songs.length - 1} />
       ))}
     </View>
   );
