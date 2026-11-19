@@ -1,0 +1,51 @@
+diff --git a/build/react-navigation/stack/utils/gestureActivationCriteria.js b/build/react-navigation/stack/utils/gestureActivationCriteria.js
+index 8d49ccae37a4a4c7a6bd0dda0f95f36083d018d0..40f11bc40631343f12460e6e7ef63ca478558592 100644
+--- a/build/react-navigation/stack/utils/gestureActivationCriteria.js
++++ b/build/react-navigation/stack/utils/gestureActivationCriteria.js
+@@ -18,8 +18,9 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+     const distance = gestureResponseDistance !== undefined ? gestureResponseDistance : gestureDirection === 'vertical' || gestureDirection === 'vertical-inverted' ? GESTURE_RESPONSE_DISTANCE_VERTICAL : GESTURE_RESPONSE_DISTANCE_HORIZONTAL;
+     if (gestureDirection === 'vertical') {
+         return {
+-            maxDeltaX: 15,
+-            minOffsetY: 5,
++            // react-native-gesture-handler 3 dropped maxDeltaX/minOffsetY.
++            failOffsetX: [-15, 15],
++            activeOffsetY: 5,
+             hitSlop: {
+                 bottom: -layout.height + distance
+             },
+@@ -27,8 +28,8 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+         };
+     } else if (gestureDirection === 'vertical-inverted') {
+         return {
+-            maxDeltaX: 15,
+-            minOffsetY: -5,
++            failOffsetX: [-15, 15],
++            activeOffsetY: -5,
+             hitSlop: {
+                 top: -layout.height + distance
+             },
+@@ -39,8 +40,10 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+         const invertedMultiplier = (0, _getInvertedMultiplier.getInvertedMultiplier)(gestureDirection, direction === 'rtl');
+         if (invertedMultiplier === 1) {
+             return {
+-                minOffsetX: 5,
+-                maxDeltaY: 20,
++                // react-native-gesture-handler 3 dropped minOffsetX/maxDeltaY: without these the
++                // back swipe takes vertical drags too, and pushed screens can't scroll.
++                activeOffsetX: 5,
++                failOffsetY: [-20, 20],
+                 hitSlop: {
+                     right: hitSlop
+                 },
+@@ -48,8 +51,8 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+             };
+         } else {
+             return {
+-                minOffsetX: -5,
+-                maxDeltaY: 20,
++                activeOffsetX: -5,
++                failOffsetY: [-20, 20],
+                 hitSlop: {
+                     left: hitSlop
+                 },

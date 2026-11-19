@@ -74,5 +74,8 @@
     "test": "bun test src",
     "typecheck": "tsc --noEmit"
   },
-  "private": true
+  "private": true,
+  "patchedDependencies": {
+    "expo-router@58.0.31": "patches/expo-router@58.0.31.patch"
+  }
 }
