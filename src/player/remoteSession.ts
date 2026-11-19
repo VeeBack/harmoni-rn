@@ -37,7 +37,7 @@ function sync() {
     return;
   }
   const name = devices.find((d) => d.id === remoteActive)?.name ?? "another device";
-  const key = [remoteActive, name, st.rev, st.index, st.playing, st.buffering, st.positionMs, st.at, st.repeat, st.shuffle, st.volume, st.muted, st.queue === lastQueue].join("|");
+  const key = [remoteActive, name, st.index, st.playing, st.buffering, Math.round(st.positionMs / 1000), st.repeat, st.shuffle, st.volume, st.muted, st.queue === lastQueue].join("|");
   if (key === lastSent) return;
   lastSent = key;
   const body: Record<string, unknown> = {
@@ -53,8 +53,11 @@ function sync() {
     volume: st.volume,
     muted: st.muted,
   };
-  body.queue = st.queue.slice(0, 500);
-  lastQueue = st.queue;
+  // The queue only travels when it changed (it can be 500 songs); native keeps the last one.
+  if (st.queue !== lastQueue) {
+    body.queue = st.queue.slice(0, 500);
+    lastQueue = st.queue;
+  }
   Native.setRemote(JSON.stringify(body)).catch(() => {});
 }
 

@@ -148,7 +148,7 @@ class PlaybackService : MediaLibraryService() {
       s.player = r
     }
     refreshButtons()
-    NowPlayingWidget.refresh(this, r)
+    NowPlayingWidget.refresh(this, r) // returns early when nothing it shows changed
   }
 
   fun linkRoutingChanged() {

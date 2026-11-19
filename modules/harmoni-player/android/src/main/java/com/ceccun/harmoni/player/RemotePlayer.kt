@@ -72,8 +72,9 @@ class RemotePlayer(looper: Looper, private val send: (JSONObject) -> Unit) : Sim
 
   /** Updates what the other device is doing (from JS, on every Link state change). */
   fun update(json: JSONObject) {
-    val queue = json.optJSONArray("queue") ?: JSONArray()
-    val items = (0 until queue.length()).mapNotNull { i ->
+    // The queue only comes when it changed; otherwise keep the items already built.
+    val queue = json.optJSONArray("queue")
+    val items = if (queue == null) remote?.items ?: emptyList() else (0 until queue.length()).mapNotNull { i ->
       val song = queue.optJSONObject(i) ?: return@mapNotNull null
       val item = runCatching { Core.itemFor(song) }.getOrNull() ?: return@mapNotNull null
       val dur = song.optLong("durationMs", 0)

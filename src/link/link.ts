@@ -78,7 +78,7 @@ export function positionNow(s: Pick<LinkState, "positionMs" | "playing" | "at" |
 
 export function onlineDevices(): LinkDevice[] {
   const now = serverNow();
-  return useLink.getState().devices.filter((d) => d.until > now);
+  return useLink.getState().devices.filter((d) => (untilById.get(d.id) ?? d.until) > now);
 }
 
 type Handler = (e: LinkEvent) => void;
@@ -88,6 +88,25 @@ export function setLinkHandler(h: Handler) {
 }
 
 const BACKOFF = [1000, 2000, 5000, 10000, 30000];
+
+/** The newest expiry time per device; kept out of state so pings don't re-render. */
+const untilById = new Map<string, number>();
+function noteUntil(list: LinkDevice[]) {
+  for (const d of list) untilById.set(d.id, d.until);
+}
+
+/** Same devices (ignoring their expiry times, which move on every ping)? */
+function sameDevices(a: LinkDevice[], b: LinkDevice[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i].id !== b[i].id || a[i].name !== b[i].name || a[i].kind !== b[i].kind) return false;
+  return true;
+}
+
+/** The clock offset, kept steady unless it really moved (network jitter otherwise re-renders everything). */
+function steadyOffset(prev: number, serverNow: number) {
+  const next = serverNow - Date.now();
+  return Math.abs(next - prev) > 250 ? next : prev;
+}
 
 class LinkClient {
   private abort: AbortController | null = null;
@@ -200,6 +219,7 @@ class LinkClient {
 
   private receive(e: LinkEvent) {
     const s = useLink.getState();
+    if ("devices" in e && Array.isArray(e.devices)) noteUntil(e.devices);
     switch (e.type) {
       case "hello":
         useLink.setState({
@@ -212,10 +232,11 @@ class LinkClient {
         });
         break;
       case "devices":
-        useLink.setState({ devices: e.devices, active: e.active, offset: e.now - Date.now() });
+        useLink.setState({ devices: sameDevices(s.devices, e.devices) ? s.devices : e.devices, active: e.active, offset: steadyOffset(s.offset, e.now) });
         break;
       case "ping": {
-        useLink.setState({ devices: e.devices, active: e.active, offset: e.now - Date.now() });
+        if (!sameDevices(s.devices, e.devices) || s.active !== e.active || Math.abs(s.offset - (e.now - Date.now())) > 250)
+          useLink.setState({ devices: sameDevices(s.devices, e.devices) ? s.devices : e.devices, active: e.active, offset: steadyOffset(s.offset, e.now) });
         const iAmActive = e.active === deviceId;
         if (!iAmActive && typeof e.rev === "number" && e.rev > s.rev && !this.revCheck) {
           // Maybe a state event is on its way; give it 3 s, then resync.
