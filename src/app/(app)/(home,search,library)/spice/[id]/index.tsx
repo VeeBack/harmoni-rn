@@ -7,6 +7,9 @@ import { plural } from "@/lib/format";
 import { Collection } from "@/song/Collection";
 import { SongList } from "@/song/SongList";
 import { SpiceArt } from "@/spice/SpiceArt";
+import { GrindingNote, SpiceGrinder } from "@/spice/SpiceGrinder";
+import type { SpiceCard } from "@/api/types";
+import { useWindowDimensions } from "react-native";
 import { libraryChanged } from "@/state/collections";
 import { queryClient } from "@/state/query";
 import { Section, SmallButton } from "@/ui/bits";
@@ -21,9 +24,15 @@ function made(iso?: string) {
 }
 
 export default function SpiceScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, preview } = useLocalSearchParams<{ id: string; preview?: string }>();
   const q = useQuery({ queryKey: ["spice", id], queryFn: () => Api.spice(id) });
-  const s = q.data;
+  // Dev only: ?preview=grind shows the page as if the Spice were still being made.
+  const grinding = __DEV__ && preview === "grind";
+  // Known from the library list before the Spice itself loads, so the grinder can wear its colours.
+  const cached = (queryClient.getQueryData<SpiceCard[]>(["spices"]) ?? []).find((x) => x.id === id);
+  const { width } = useWindowDimensions();
+  const artSize = Math.round(Math.min(width * 0.66, 280));
+  const s = grinding ? undefined : q.data;
   const reload = () => {
     libraryChanged();
     q.refetch();
@@ -92,7 +101,7 @@ export default function SpiceScreen() {
       title={s?.name ?? ""}
       description={s ? (custom ? `Grown from ${plural(s.seeds.length || s.seedCount || 0, "seed song")}, and different every day.` : "Picked for you from what you listen to, and different every day.") : undefined}
       meta={made(s?.generatedAt)}
-      art={s ? <SpiceArt name={s.name} covers={s.covers} /> : undefined}
+      art={s ? <SpiceArt name={s.name} covers={s.covers} /> : <SpiceGrinder size={artSize} seed={cached?.name ?? id} />}
       artUrl={s?.covers[0]}
       songs={s?.songs}
       numbered
@@ -102,7 +111,7 @@ export default function SpiceScreen() {
       findLabel="Find in Spice"
       menu={menu}
       menuLabel="Spice options"
-      loadingNote="Grinding your Spice… finding songs that go with the ones you picked."
+      loadingNote={<GrindingNote />}
       error={q.isError ? { title: "Spice not found", body: "It may have been deleted, or it belongs to someone else." } : null}
       noMatch={(x) => `Nothing in this Spice matches “${x}”.`}
       empty={

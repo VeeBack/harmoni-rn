@@ -120,16 +120,17 @@ export function Collection(p: CollectionProps) {
   };
 
   // The artwork drifts up a little slower than the page, and shrinks as it goes (parallax).
+  // Pulled down, the artwork grows; scrolled up, it shrinks toward the top and fades (never into the title).
   const artStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(scrollY.value, [-200, 0, artSize], [-60, 0, artSize * 0.35], "clamp") }, { scale: interpolate(scrollY.value, [-200, 0, artSize], [1.12, 1, 0.86], "clamp") }],
-    opacity: interpolate(scrollY.value, [0, artSize * 0.9], [1, 0.2], "clamp"),
+    transform: [{ translateY: interpolate(scrollY.value, [-200, 0], [-100, 0], "clamp") }, { scale: interpolate(scrollY.value, [-200, 0, artSize], [1.14, 1, 0.9], "clamp") }],
+    opacity: interpolate(scrollY.value, [artSize * 0.2, artSize * 0.95], [1, 0], "clamp"),
   }));
 
   const header = (
     <View>
       <LinearGradient colors={[theme ? `${theme.color}66` : "rgba(60,56,50,0.35)", "rgba(12,11,10,0)"]} locations={[0, 1]} style={[StyleSheet.absoluteFill, { bottom: undefined, height: insets.top + TOPBAR + artSize + 120 }]} />
       <View style={{ paddingTop: insets.top + TOPBAR + 12, paddingHorizontal: 20, alignItems: "center" }}>
-        <Animated.View entering={FadeIn.duration(450)} style={[styles.art, { width: artSize, height: artSize, borderRadius: p.round ? artSize / 2 : radius.md }, artStyle]}>
+        <Animated.View entering={FadeIn.duration(450)} style={[styles.art, { width: artSize, height: artSize, borderRadius: p.round ? artSize / 2 : radius.md, transformOrigin: "50% 0%" }, artStyle]}>
           {p.art ?? <Artwork url={firstArt} size={artSize} radius={p.round ? artSize / 2 : radius.md} round={p.round} px={900} />}
         </Animated.View>
         <View style={{ alignSelf: "stretch", alignItems: "center", marginTop: 22, gap: 2 }}>
@@ -180,7 +181,7 @@ export function Collection(p: CollectionProps) {
         </Animated.View>
       ) : null}
       <View style={{ paddingHorizontal: 20 }}>
-        {p.error ? (
+        {p.error && !songs?.length ? (
           <EmptyState title={p.error.title} body={p.error.body} icon="cloud-off" />
         ) : !songs ? (
           <View style={{ gap: 16, paddingVertical: 8 }}>
