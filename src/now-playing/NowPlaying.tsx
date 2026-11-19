@@ -552,18 +552,17 @@ function ArtStage({ song, quiet, panel, compact }: { song: QueueSong; quiet?: st
   return (
     <View style={{ flex: 1, paddingHorizontal: 28, paddingBottom: 6, alignItems: "center" }}>
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <Animated.View
-          ref={ref}
-          collapsable={false}
-          onLayout={measure}
-          style={[{ elevation: 28, shadowColor: "#000", borderRadius: 12, transformOrigin: "0% 0%" }, artStyle]}
-        >
-          <Press onLongPress={() => openSongMenu(song, [], { fromNowPlaying: true })} feedback={false} scaleTo={1}>
-            <Animated.View style={[{ overflow: "hidden" }, artRadius]}>
-              <Artwork url={song.artworkUrl} size={art} radius={0} px={900} priority="high" />
-            </Animated.View>
-          </Press>
-        </Animated.View>
+        {/* Measured here, where nothing moves it: measureInWindow counts transforms, so measuring the
+            artwork itself while it was shrunk (paused) or flown to the title put it off from then on. */}
+        <View ref={ref} collapsable={false} onLayout={measure}>
+          <Animated.View style={[{ elevation: 28, shadowColor: "#000", borderRadius: 12, transformOrigin: "0% 0%" }, artStyle]}>
+            <Press onLongPress={() => openSongMenu(song, [], { fromNowPlaying: true })} feedback={false} scaleTo={1}>
+              <Animated.View style={[{ overflow: "hidden" }, artRadius]}>
+                <Artwork url={song.artworkUrl} size={art} radius={0} px={900} priority="high" />
+              </Animated.View>
+            </Press>
+          </Animated.View>
+        </View>
       </View>
       <Animated.View style={[{ width: "100%", flexDirection: "row", alignItems: "center", gap: 12 }, infoStyle]}>
         <View style={{ flex: 1 }}>
