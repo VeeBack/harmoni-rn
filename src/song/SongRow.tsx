@@ -1,9 +1,18 @@
 import { memo, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import type { Song } from "@/api/types";
 import { useDownloadState } from "@/downloads/downloads";
+import { DownloadRing } from "@/downloads/DownloadRing";
 import { artistLine } from "@/lib/format";
 import { deviceId, useLink } from "@/link/link";
 import { usePlayer } from "@/player/player";
@@ -95,6 +104,7 @@ export const SongRow = memo(function SongRow({
         </View>
         {last ? null : <View style={styles.separator} />}
       </View>
+      <DownloadRing id={song.id} />
       <IconButton label={`More options for ${song.title}`} onPress={() => onMore(song, index)} size={40} feedback="contextClick">
         <Icon name="ellipsis" size={20} color={colors.text2} />
       </IconButton>
@@ -123,7 +133,14 @@ function Bar({ i, playing, color }: { i: number; playing: boolean; color: string
     const d = [520, 380, 460][i];
     h.value = withDelay(
       i * 90,
-      withRepeat(withSequence(withTiming(1, { duration: d, easing: Easing.inOut(Easing.sin) }), withTiming(0.25, { duration: d, easing: Easing.inOut(Easing.sin) })), -1, false),
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: d, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.25, { duration: d, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      ),
     );
   }, [playing, h, i]);
   const style = useAnimatedStyle(() => ({ height: 14 * h.value }));

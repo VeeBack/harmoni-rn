@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 
 import { Api } from "@/api/endpoints";
 import { useDownloads } from "@/downloads/downloads";
@@ -9,13 +9,9 @@ import { DAILY_SPICE_HREF, useDailySpice } from "@/spice/daily";
 import { useSpiceDraft } from "@/spice/draft";
 import { libraryChanged, sortCollections, usePlaylists, useSharedPlaylists, useSpices } from "@/state/collections";
 import { EmptyState, Section, Skeleton, SmallButton } from "@/ui/bits";
-import { Icon, type IconName } from "@/ui/Icon";
 import { openMenu, prompt, toast } from "@/ui/overlays";
-import { Press } from "@/ui/Press";
-import type { ReactNode } from "react";
+import { NavRow } from "@/ui/NavRow";
 import { Screen } from "@/ui/Screen";
-import { Text } from "@/ui/Text";
-import { colors } from "@/ui/theme";
 
 export async function newPlaylist() {
   const name = await prompt({ title: "New playlist", label: "Name it", confirm: "Create" });
@@ -68,16 +64,18 @@ export default function Library() {
       }}
     >
       <View style={{ marginTop: 4 }}>
-        <Row icon="heart" label="Liked Songs" onPress={() => router.push("/liked")} />
-        <Row icon="history" label="Recently Played" onPress={() => router.push("/recent")} />
-        {daily ? <Row icon="spice" label={daily.label} detail={daily.part} onPress={() => router.push(DAILY_SPICE_HREF as never)} /> : null}
-        <Row
+        <NavRow icon="heart" label="Liked Songs" onPress={() => router.push("/liked")} />
+        <NavRow icon="history" label="Recently Played" onPress={() => router.push("/recent")} />
+        {daily ? (
+          <NavRow icon="spice" label={daily.label} detail={daily.part} onPress={() => router.push(DAILY_SPICE_HREF as never)} />
+        ) : null}
+        <NavRow
           icon="download"
           label="Downloads"
           detail={downloads ? plural(downloads, "song") : undefined}
           onPress={() => router.push("/downloads")}
         />
-        <Row icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
+        <NavRow icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
       </View>
       <Section
         title="Playlists"
@@ -129,52 +127,3 @@ export default function Library() {
     </Screen>
   );
 }
-
-function Row({
-  icon,
-  leading,
-  label,
-  detail,
-  onPress,
-  last,
-}: {
-  icon?: IconName;
-  leading?: ReactNode;
-  label: string;
-  detail?: string;
-  onPress: () => void;
-  last?: boolean;
-}) {
-  return (
-    <Press
-      onPress={onPress}
-      feedback={false}
-      scaleTo={1}
-      highlight="rgba(255,255,255,0.06)"
-      style={styles.row}
-      accessibilityLabel={detail ? `${label}, ${detail}` : label}
-    >
-      <View style={{ width: 26, alignItems: "center" }}>
-        {leading ?? (icon ? <Icon name={icon} size={22} color={colors.tint} /> : null)}
-      </View>
-      <View style={styles.rowBody}>
-        <Text variant="title3" weight={400} numberOfLines={1} style={{ flex: 1 }}>
-          {label}
-        </Text>
-        {detail ? (
-          <Text variant="subhead" color={colors.text3}>
-            {detail}
-          </Text>
-        ) : null}
-        <Icon name="chevron-right" size={17} color={colors.text3} />
-        {last ? null : <View style={styles.line} />}
-      </View>
-    </Press>
-  );
-}
-
-const styles = StyleSheet.create({
-  row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 16, marginHorizontal: -20, paddingLeft: 20 },
-  rowBody: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 20 },
-  line: { position: "absolute", left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
-});

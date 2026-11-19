@@ -248,9 +248,10 @@ class HarmoniPlayerModule : Module() {
       body["playing"] = p.isPlaying
       body["index"] = p.currentMediaItemIndex
     }
-    val active = runCatching { Downloads.active() }.getOrDefault(emptyList())
+    // Progress for the songs downloading now (the rest of the line comes as onDownload events).
+    val active = runCatching { Downloads.active().filter { it.state == Download.STATE_DOWNLOADING } }.getOrDefault(emptyList())
     if (active.isNotEmpty()) {
-      body["downloads"] = active.map { mapOf("id" to it.request.id, "percent" to it.percentDownloaded.toDouble(), "state" to Downloads.stateName(it.state)) }
+      body["downloads"] = active.map { mapOf("id" to it.request.id, "percent" to it.percentDownloaded.toDouble(), "state" to Downloads.stateOf(it)) }
     }
     sendEvent("onTick", body)
   }
@@ -718,6 +719,15 @@ class HarmoniPlayerModule : Module() {
       Core.io.execute {
         val a = JSONArray(json)
         runCatching { Downloads.addAll(context, (0 until a.length()).map { a.getJSONObject(it) }) }
+        promise.resolve(null)
+      }
+    }
+
+    // What's on screen goes first: these, if they're waiting, move to the front of the line in this order.
+    AsyncFunction("prioritizeDownloads") { json: String, promise: Promise ->
+      Core.io.execute {
+        val a = JSONArray(json)
+        runCatching { Downloads.prioritize((0 until a.length()).map { a.getString(it) }) }
         promise.resolve(null)
       }
     }

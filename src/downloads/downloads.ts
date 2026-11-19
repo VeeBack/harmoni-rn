@@ -99,26 +99,52 @@ function askForNotifications() {
   PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
 }
 
+/**
+ * Saves songs, in this order (what's on screen, top to bottom), ahead of anything else
+ * waiting: new ones and ones already in line both go to the front. Returns how many are new.
+ */
 export function download(songs: Song[]) {
   askForNotifications();
+  const items = useDownloads.getState().items;
   const fresh = songs.filter((s) => {
-    const cur = useDownloads.getState().items[s.id];
+    const cur = items[s.id];
     return !cur || cur.state === "failed" || cur.state === "stopped";
   });
-  if (!fresh.length) return 0;
-  useDownloads.setState((st) => {
-    const items = { ...st.items };
-    for (const s of fresh) {
-      pendingSongs.set(s.id, s);
-      items[s.id] = { id: s.id, state: "queued", percent: 0, bytes: 0, updatedAt: Date.now(), song: s };
-    }
-    return { items };
+  // Already waiting: no new download, but they move up with the rest.
+  const send = songs.filter((s) => {
+    const st = items[s.id]?.state;
+    return !st || st === "failed" || st === "stopped" || st === "queued";
   });
-  // Hand them over in chunks so a huge playlist never builds one enormous string.
-  (async () => {
-    for (let i = 0; i < fresh.length; i += 1000) await Native.download(JSON.stringify(fresh.slice(i, i + 1000)));
-  })().catch(() => {});
+  if (fresh.length) {
+    useDownloads.setState((st) => {
+      const next = { ...st.items };
+      for (const s of fresh) {
+        pendingSongs.set(s.id, s);
+        next[s.id] = { id: s.id, state: "queued", percent: 0, bytes: 0, updatedAt: Date.now(), song: s };
+      }
+      return { items: next };
+    });
+  }
+  if (send.length) {
+    // In chunks so a huge playlist never builds one enormous string. Each chunk goes to the
+    // front of the line, so the last goes first and the first ends up first.
+    (async () => {
+      for (let i = Math.floor((send.length - 1) / 1000) * 1000; i >= 0; i -= 1000)
+        await Native.download(JSON.stringify(send.slice(i, i + 1000)));
+    })().catch(() => {});
+  }
   return fresh.length;
+}
+
+/** Whatever of these is waiting to download goes next, in this order (the screen in front of them). */
+export function prioritizeDownloads(songs: Pick<Song, "id">[]) {
+  const items = useDownloads.getState().items;
+  const ids = songs.map((s) => s.id).filter((id) => items[id]?.state === "queued");
+  if (!ids.length) return;
+  (async () => {
+    for (let i = Math.floor((ids.length - 1) / 2000) * 2000; i >= 0; i -= 2000)
+      await Native.prioritizeDownloads(JSON.stringify(ids.slice(i, i + 2000)));
+  })().catch(() => {});
 }
 
 export function removeDownload(id: string) {
@@ -137,6 +163,9 @@ export function removeAllDownloads() {
 }
 
 export const useDownloadState = (id: string | undefined) => useDownloads((s) => (id ? s.items[id]?.state : undefined));
+
+/** 0..100, whole numbers (so a row only redraws when it moves a percent). */
+export const useDownloadPercent = (id: string) => useDownloads((s) => Math.round(Math.max(0, Math.min(100, s.items[id]?.percent ?? 0))));
 
 /** "all" when every song is saved, "some" while some are saving or saved, else "none". */
 export function useListDownloadState(songs: Song[] | undefined): { state: "none" | "some" | "all"; saving: number; saved: number } {

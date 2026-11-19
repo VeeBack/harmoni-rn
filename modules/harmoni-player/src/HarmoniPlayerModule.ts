@@ -158,7 +158,10 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   setLikedIds(json: string): void;
   setLiked(id: string, liked: boolean): void;
 
+  /** Saves these songs, putting them (and any of them already waiting) at the front of the line in this order. */
   download(json: string): Promise<void>;
+  /** Moves these song ids, if they're waiting to download, to the front of the line in this order. */
+  prioritizeDownloads(json: string): Promise<void>;
   removeDownload(id: string): Promise<void>;
   removeDownloads(json: string): Promise<void>;
   removeAllDownloads(): Promise<void>;

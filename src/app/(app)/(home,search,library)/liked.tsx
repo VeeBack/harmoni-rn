@@ -1,20 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, View } from "react-native";
 
 import { Api } from "@/api/endpoints";
+import { LikedArt } from "@/song/art";
 import { Collection } from "@/song/Collection";
-import { Icon } from "@/ui/Icon";
-
-export function LikedArt({ size = 72 }: { size?: number }) {
-  return (
-    <View style={StyleSheet.absoluteFill}>
-      <LinearGradient colors={["#f2d5c4", "#c9a7d8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-        <Icon name="heart-solid" size={size} color="#2b1d2e" />
-      </LinearGradient>
-    </View>
-  );
-}
 
 export default function Liked() {
   const q = useQuery({ queryKey: ["likes"], queryFn: Api.likes });
@@ -32,7 +20,10 @@ export default function Liked() {
       defaultSort={{ field: "order", descending: true }}
       findLabel="Find in Liked Songs"
       noMatch={(x) => `None of your liked songs match “${x}”.`}
-      empty={{ title: "Nothing here yet", body: "Tap the heart on any song and it'll land here, so the good stuff is always one tap away." }}
+      empty={{
+        title: "Nothing here yet",
+        body: "Tap the heart on any song and it'll land here, so the good stuff is always one tap away.",
+      }}
       refreshing={q.isRefetching}
       onRefresh={() => q.refetch()}
     />

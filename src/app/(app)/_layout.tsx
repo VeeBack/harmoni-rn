@@ -18,6 +18,8 @@ import { useSession } from "@/state/session";
 import { toast } from "@/ui/overlays";
 import { colors } from "@/ui/theme";
 import { useDownloads } from "@/downloads/downloads";
+// Learns which songs each playlist and Spice holds as they load, for Downloads (works offline).
+import "@/downloads/members";
 
 setPlayerToast(toast);
 

@@ -1,5 +1,6 @@
 import { FlashList } from "@shopify/flash-list";
 import { BlurTargetView } from "expo-blur";
+import { useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { StyleSheet, TextInput, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
@@ -7,7 +8,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut, interpolate, useAnimatedStyle, u
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { Song } from "@/api/types";
-import { download, removeDownloads, useListDownloadState } from "@/downloads/downloads";
+import { download, prioritizeDownloads, removeDownloads, useListDownloadState } from "@/downloads/downloads";
 import { matches, plural, sameList, total } from "@/lib/format";
 import { kv } from "@/lib/storage";
 import { useArtworkColors, usePlayback } from "@/player/hooks";
@@ -119,6 +120,14 @@ export function Collection(p: CollectionProps) {
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.value = e.nativeEvent.contentOffset.y;
   };
+
+  // Songs here still waiting to download go next, top to bottom, while this screen is in front.
+  const waiting = useListDownloadState(sorted).saving > 0;
+  useFocusEffect(
+    useCallback(() => {
+      if (waiting) prioritizeDownloads(sorted);
+    }, [waiting, sorted]),
+  );
 
   const artSize = Math.round(Math.min(width * 0.66, 280));
   const sortable = !!p.sortKey && !!songs && songs.length > 1;

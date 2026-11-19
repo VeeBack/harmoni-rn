@@ -1,16 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
 
 import { Api } from "@/api/endpoints";
 import type { Playlist, Song } from "@/api/types";
 import { copyLink, playlistPath, profilePath, shareLink } from "@/lib/share";
 import { linkFor, openShareSheet, type Sharing } from "@/profile/ShareSheet";
+import { Collage } from "@/song/art";
 import { Collection } from "@/song/Collection";
 import { libraryChanged } from "@/state/collections";
 import { queryClient } from "@/state/query";
-import { Artwork } from "@/ui/Artwork";
 import { Icon } from "@/ui/Icon";
 import { confirm, prompt, toast, type MenuItem } from "@/ui/overlays";
 import { IconButton } from "@/ui/Press";
@@ -18,18 +17,6 @@ import { Text } from "@/ui/Text";
 import { colors } from "@/ui/theme";
 
 const KIND = { private: "Playlist", link: "Playlist · shared by link", users: "Shared playlist", public: "Public playlist" } as const;
-
-function Collage({ urls }: { urls: string[] }) {
-  return (
-    <View style={[StyleSheet.absoluteFill, { flexDirection: "row", flexWrap: "wrap" }]}>
-      {urls.slice(0, 4).map((u, i) => (
-        <View key={i} style={{ width: "50%", height: "50%" }}>
-          <Artwork url={u} radius={0} px={400} />
-        </View>
-      ))}
-    </View>
-  );
-}
 
 export default function PlaylistScreen() {
   // From a share link: ?key= lets them in.
