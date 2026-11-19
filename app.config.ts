@@ -4,9 +4,9 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 //   VERSION_CODE  Android versionCode (CI uses the run number, so each build upgrades the last)
 //   APP_VERSION   the version people see (CI uses 1.0.<run number>, matching the release tag)
 //   LINK_HOSTS    servers whose links (/u/…, /song/…, /playlist/…) open in the app; comma-separated
-const LINK_HOSTS = (process.env.LINK_HOSTS || "music.ceccun.com")
+const LINK_HOSTS: string[] = String(process.env.LINK_HOSTS || "music.ceccun.com")
   .split(",")
-  .map((h) => h.trim())
+  .map((h: string) => h.trim())
   .filter(Boolean);
 const LINK_PATHS = ["/u/", "/song/", "/playlist/", "/spice/", "/album/", "/artist/"];
 
@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         action: "VIEW",
         autoVerify: true,
         category: ["BROWSABLE", "DEFAULT"],
-        data: LINK_HOSTS.flatMap((host) => LINK_PATHS.map((pathPrefix) => ({ scheme: "https", host, pathPrefix }))),
+        data: LINK_HOSTS.flatMap((host: string) => LINK_PATHS.map((pathPrefix) => ({ scheme: "https", host, pathPrefix }))),
       },
     ],
   },
