@@ -19,7 +19,7 @@ import { Icon } from "@/ui/Icon";
 import { IconButton, Press } from "@/ui/Press";
 import { Screen } from "@/ui/Screen";
 import { Text } from "@/ui/Text";
-import { colors, radius } from "@/ui/theme";
+import { colors } from "@/ui/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TOPBAR } from "@/shell/layout";
 
@@ -69,12 +69,36 @@ function Hero({ a }: { a: Artist }) {
   const meta = [a.fans ? `${compact(a.fans)} fans` : null, releases ? plural(releases, "release") : null].filter(Boolean).join(" · ");
   const current = !!pb.song && a.popular.some((s) => s.id === pb.song!.id);
   return (
-    <View style={{ minHeight: Math.max(300, Math.min(height * 0.46, 460)), justifyContent: "flex-end", paddingHorizontal: 20, paddingBottom: 24, paddingTop: insets.top + TOPBAR, overflow: "hidden" }}>
+    <View
+      style={{
+        minHeight: Math.max(300, Math.min(height * 0.46, 460)),
+        justifyContent: "flex-end",
+        paddingHorizontal: 20,
+        paddingBottom: 24,
+        paddingTop: insets.top + TOPBAR,
+        overflow: "hidden",
+      }}
+    >
       {a.bannerUrl ? (
         <>
-          <Image source={{ uri: a.bannerUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition={{ top: "30%" }} transition={300} />
-          <LinearGradient colors={["rgba(18,18,18,0)", "rgba(18,18,18,0.6)", "#121212"]} locations={[0.3, 0.62, 1]} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={["rgba(18,18,18,0.55)", "rgba(18,18,18,0)"]} start={{ x: 0, y: 0 }} end={{ x: 0.55, y: 0 }} style={StyleSheet.absoluteFill} />
+          <Image
+            source={{ uri: a.bannerUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            contentPosition={{ top: "30%" }}
+            transition={300}
+          />
+          <LinearGradient
+            colors={["rgba(12,11,10,0)", "rgba(12,11,10,0.55)", colors.bg]}
+            locations={[0.35, 0.68, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(12,11,10,0.45)", "rgba(12,11,10,0)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 0.3 }}
+            style={StyleSheet.absoluteFill}
+          />
         </>
       ) : (
         <LinearGradient colors={[theme?.deep ?? colors.surface2, colors.bg]} style={StyleSheet.absoluteFill} />
@@ -86,17 +110,29 @@ function Hero({ a }: { a: Artist }) {
           </View>
         ) : null}
         <View style={{ flex: 1, gap: 10 }}>
-          <Text size={13} weight={500} color="rgba(255,255,255,0.8)">
-            Artist
-          </Text>
-          <Text size={48} weight={800} style={{ letterSpacing: -1.9, lineHeight: 48, textShadowColor: "rgba(0,0,0,0.25)", textShadowRadius: 30 }}>
+          <Text
+            size={40}
+            weight={800}
+            style={{ letterSpacing: -1.2, lineHeight: 44, textShadowColor: "rgba(0,0,0,0.3)", textShadowRadius: 24 }}
+          >
             {a.name}
           </Text>
-          {meta ? <Text color="rgba(255,255,255,0.78)">{meta}</Text> : null}
+          {meta ? (
+            <Text variant="subhead" color="rgba(255,255,255,0.72)">
+              {meta}
+            </Text>
+          ) : null}
           {a.popular.length ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10 }}>
-              <PlayButton label={`Play ${a.name}`} playing={current && pb.playing} onPress={() => (current ? player.toggle() : player.play(a.popular, 0))} />
-              <IconButton label="Shuffle" onPress={() => player.play(a.popular, Math.floor(Math.random() * a.popular.length), { shuffle: true })}>
+              <PlayButton
+                label={`Play ${a.name}`}
+                playing={current && pb.playing}
+                onPress={() => (current ? player.toggle() : player.play(a.popular, 0))}
+              />
+              <IconButton
+                label="Shuffle"
+                onPress={() => player.play(a.popular, Math.floor(Math.random() * a.popular.length), { shuffle: true })}
+              >
                 <Icon name="shuffle" size={22} color="rgba(255,255,255,0.85)" />
               </IconButton>
             </View>
@@ -109,8 +145,15 @@ function Hero({ a }: { a: Artist }) {
 
 function Pill({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Press onPress={onPress} feedback="tap" scaleTo={0.96} style={{ alignSelf: "flex-start", paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, marginTop: 12 }}>
-      <Text size={13} weight={600} color={colors.text2}>
+    <Press
+      onPress={onPress}
+      feedback="tap"
+      scaleTo={1}
+      dim
+      hitSlop={8}
+      style={{ alignSelf: "flex-start", paddingVertical: 8, marginTop: 8 }}
+    >
+      <Text variant="callout" weight={600} color={colors.tint}>
         {label}
       </Text>
     </Press>
@@ -154,7 +197,7 @@ function Body({ a }: { a: Artist }) {
             {a.popular.length > 5 ? <Pill label={more ? "Show less" : "Show more"} onPress={() => setMore(!more)} /> : null}
           </>
         ) : (
-          <Text size={13} color={colors.text3}>
+          <Text variant="subhead" color={colors.text3}>
             No popular songs found yet.
           </Text>
         )}
@@ -162,22 +205,29 @@ function Body({ a }: { a: Artist }) {
 
       {a.latest ? (
         <Section title="Latest release" style={{ marginTop: 40 }}>
-          <Press onPress={() => router.push(`/album/${a.latest!.id}`)} feedback="tap" scaleTo={0.98} style={{ maxWidth: 360, padding: 20, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 8 }}>
-            <View style={{ elevation: 12, shadowColor: "#000", borderRadius: 16, marginBottom: 8 }}>
-              <Artwork url={a.latest.artworkUrl} radius={16} px={700} />
+          <Press
+            onPress={() => router.push(`/album/${a.latest!.id}`)}
+            feedback="tap"
+            scaleTo={0.98}
+            style={{ flexDirection: "row", alignItems: "center", gap: 16 }}
+          >
+            <View style={{ elevation: 12, shadowColor: "#000", borderRadius: 10 }}>
+              <Artwork url={a.latest.artworkUrl} size={120} radius={10} px={400} />
             </View>
-            <Text size={13} color={colors.text2}>
-              {a.latest.kind ? KIND[a.latest.kind] : "Release"}
-              {a.latest.releaseDate ? ` · ${shortDate(a.latest.releaseDate)}` : ""}
-            </Text>
-            <Text size={18} weight={600} style={{ lineHeight: 22 }}>
-              {a.latest.title}
-            </Text>
-            {a.latest.trackCount ? (
-              <Text size={13} color={colors.text3}>
-                {plural(a.latest.trackCount, "song")}
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text variant="caption" weight={600} color={colors.text2} style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
+                {a.latest.kind ? KIND[a.latest.kind] : "Release"}
+                {a.latest.releaseDate ? ` · ${shortDate(a.latest.releaseDate)}` : ""}
               </Text>
-            ) : null}
+              <Text variant="headline" numberOfLines={2}>
+                {a.latest.title}
+              </Text>
+              {a.latest.trackCount ? (
+                <Text variant="subhead" color={colors.text2}>
+                  {plural(a.latest.trackCount, "song")}
+                </Text>
+              ) : null}
+            </View>
           </Press>
         </Section>
       ) : null}
@@ -194,14 +244,9 @@ function Body({ a }: { a: Artist }) {
 
       {a.bio ? (
         <Section title="About">
-          <View style={{ padding: 28, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 16 }}>
-            {a.imageUrl ? <Artwork url={a.imageUrl} size={140} radius={24} /> : null}
-            {a.fans ? (
-              <Text size={18} weight={600}>
-                {a.fans.toLocaleString()} fans
-              </Text>
-            ) : null}
-            <Text color={colors.text2} style={{ lineHeight: 24 }} numberOfLines={long && !bioOpen ? 5 : undefined}>
+          <View style={{ padding: 20, borderRadius: 20, backgroundColor: colors.surface, gap: 12 }}>
+            {a.fans ? <Text variant="headline">{a.fans.toLocaleString()} fans</Text> : null}
+            <Text variant="callout" color={colors.text2} style={{ lineHeight: 23 }} numberOfLines={long && !bioOpen ? 5 : undefined}>
               {a.bio}
             </Text>
             {long ? <Pill label={bioOpen ? "Show less" : "Read more"} onPress={() => setBioOpen(!bioOpen)} /> : null}
@@ -211,11 +256,22 @@ function Body({ a }: { a: Artist }) {
 
       {a.related.length ? (
         <Section title="Fans also like">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 24 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginHorizontal: -20 }}
+            contentContainerStyle={{ paddingHorizontal: 20, gap: 24 }}
+          >
             {a.related.map((r) => (
-              <Press key={r.id} onPress={() => router.push(`/artist/${r.id}`)} feedback="tap" scaleTo={0.96} style={{ width: 148, gap: 10, alignItems: "center" }}>
+              <Press
+                key={r.id}
+                onPress={() => router.push(`/artist/${r.id}`)}
+                feedback="tap"
+                scaleTo={0.96}
+                style={{ width: 148, gap: 10, alignItems: "center" }}
+              >
                 <Artwork url={sized(r.imageUrl, 450)} size={148} round fallback="user" />
-                <Text size={13} weight={500} numberOfLines={1} align="center" style={{ width: 148 }}>
+                <Text variant="subhead" weight={500} numberOfLines={1} align="center" style={{ width: 148 }}>
                   {r.name}
                 </Text>
               </Press>

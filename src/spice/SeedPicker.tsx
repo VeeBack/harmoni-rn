@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, KeyboardAvoidingView, TextInput, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, StyleSheet, TextInput, View } from "react-native";
 import Animated, { FadeIn, LinearTransition, ZoomIn, ZoomOut } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Api } from "@/api/endpoints";
 import type { Song, Spice } from "@/api/types";
@@ -25,7 +24,6 @@ import { SpiceArt } from "./SpiceArt";
 
 /** New Spice (no `spice`) or Change seeds (with one). */
 export function SeedPicker({ spice }: { spice?: Spice }) {
-  const insets = useSafeAreaInsets();
   const dock = useDockHeight();
   const [picked, setPicked] = useState<Song[]>(() => (spice ? spice.seeds : useSpiceDraft.getState().seeds));
   const [name, setName] = useState(spice && !spice.autoNamed ? spice.name : "");
@@ -113,26 +111,53 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
     <KeyboardAvoidingView behavior="height" style={{ flex: 1 }}>
       <Screen back keyboardShouldPersistTaps="handled">
         <View style={{ paddingTop: 8, marginBottom: 24 }}>
-          <Text size={13} weight={500} color={colors.text2}>
+          <Text variant="subhead" weight={600} color={colors.tint}>
             {spice ? spice.name : "New Spice"}
           </Text>
-          <Text size={32} weight={700} style={{ letterSpacing: -0.96, lineHeight: 34, marginTop: 6, marginBottom: 10 }}>
+          <Text variant="title1" style={{ marginTop: 4, marginBottom: 8 }}>
             {spice ? "Change what it grows from" : "What should it taste like?"}
           </Text>
-          <Text color={colors.text2} style={{ lineHeight: 21 }}>
-            {spice ? "Add songs or take some away. It remakes itself from them the next time you open it." : "Pick a few songs you love. Harmoni grows a mix from them, and makes it fresh every day."}
+          <Text variant="callout" color={colors.text2}>
+            {spice
+              ? "Add songs or take some away. It remakes itself from them the next time you open it."
+              : "Pick a few songs you love. Harmoni grows a mix from them, and makes it fresh every day."}
           </Text>
         </View>
 
         {picked.length ? (
-          <Animated.View layout={LinearTransition.duration(200)} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+          <Animated.View
+            layout={LinearTransition.duration(200)}
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}
+          >
             {picked.map((s) => (
-              <Animated.View key={s.id} entering={ZoomIn.duration(240).withInitialValues({ transform: [{ scale: 0.92 }] } as never)} exiting={ZoomOut.duration(160)} layout={LinearTransition.duration(200)} style={{ height: 40, borderRadius: 999, backgroundColor: colors.surface2, paddingLeft: 6, paddingRight: 4, flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%" }}>
+              <Animated.View
+                key={s.id}
+                entering={ZoomIn.springify().damping(18)}
+                exiting={ZoomOut.duration(160)}
+                layout={LinearTransition.springify().damping(20)}
+                style={{
+                  height: 36,
+                  borderRadius: 999,
+                  backgroundColor: colors.surface2,
+                  paddingLeft: 4,
+                  paddingRight: 2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  maxWidth: "100%",
+                }}
+              >
                 <Artwork url={s.artworkUrl} size={28} round />
-                <Text size={13} weight={500} numberOfLines={1} style={{ maxWidth: 170 }}>
+                <Text variant="subhead" weight={500} numberOfLines={1} style={{ maxWidth: 170 }}>
                   {s.title}
                 </Text>
-                <Press onPress={() => toggle(s)} feedback={false} scaleTo={0.85} accessibilityLabel={`Remove ${s.title}`} style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" }}>
+                <Press
+                  onPress={() => toggle(s)}
+                  feedback={false}
+                  scaleTo={0.85}
+                  accessibilityLabel={`Remove ${s.title}`}
+                  style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" }}
+                >
                   <Icon name="close" size={14} color={colors.text2} />
                 </Press>
               </Animated.View>
@@ -141,50 +166,85 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
         ) : null}
 
         <Animated.View layout={LinearTransition.duration(220)}>
-        <View style={{ height: 48, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", paddingLeft: 17, paddingRight: 6, gap: 10, marginBottom: 28 }}>
-          <Icon name="search" size={18} color={colors.text2} />
-          <TextInput
-            ref={input}
-            value={text}
-            onChangeText={setText}
-            placeholder="Search for a song to add"
-            placeholderTextColor={colors.text3}
-            selectionColor={colors.accent}
-            cursorColor={colors.accent}
-            returnKeyType="search"
-            autoCorrect={false}
-            onSubmitEditing={() => Keyboard.dismiss()}
-            style={{ flex: 1, color: colors.text, fontFamily: fonts[400], fontSize: 16, paddingVertical: 0 }}
-          />
-          {searching ? <Spinner size={18} color={colors.text2} /> : null}
-          {text ? (
-            <Press onPress={() => setText("")} accessibilityLabel="Clear" scaleTo={0.85} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-              <Icon name="close" size={18} color={colors.text2} />
-            </Press>
-          ) : null}
-        </View>
+          <View
+            style={{
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              flexDirection: "row",
+              alignItems: "center",
+              paddingLeft: 10,
+              paddingRight: 4,
+              gap: 6,
+              marginBottom: 28,
+            }}
+          >
+            <Icon name="search" size={17} color={colors.text2} />
+            <TextInput
+              ref={input}
+              value={text}
+              onChangeText={setText}
+              placeholder="Search for a song to add"
+              placeholderTextColor={colors.text3}
+              selectionColor={colors.tint}
+              cursorColor={colors.tint}
+              returnKeyType="search"
+              autoCorrect={false}
+              onSubmitEditing={() => Keyboard.dismiss()}
+              style={{ flex: 1, color: colors.text, fontFamily: fonts[400], fontSize: 17, paddingVertical: 0 }}
+            />
+            {searching ? <Spinner size={18} color={colors.text2} /> : null}
+            {text ? (
+              <Press
+                onPress={() => setText("")}
+                accessibilityLabel="Clear"
+                scaleTo={0.85}
+                style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+              >
+                <Icon name="close" size={18} color={colors.text2} />
+              </Press>
+            ) : null}
+          </View>
 
-        <Text size={18} weight={600} style={{ marginBottom: 12 }}>
-          {query ? "Songs" : "From your listening"}
-        </Text>
-        {!list ? (
-          <SongRowsSkeleton n={6} />
-        ) : !list.length ? (
-          <Text color={colors.text2} style={{ paddingVertical: 24, lineHeight: 21 }}>
-            {query ? `Nothing turned up for “${query}”. Try the artist's name on its own.` : "Start by searching for a song you love. Once you've been listening a while, your favourites show up here to pick from."}
+          <Text variant="title2" style={{ marginBottom: 8 }}>
+            {query ? "Songs" : "From your listening"}
           </Text>
-        ) : (
-          <Animated.View entering={FadeIn.duration(200)}>
-            {list.map((s) => (
-              <PickRow key={s.id} song={s} picked={isPicked(s)} onPress={() => toggle(s)} />
-            ))}
-          </Animated.View>
-        )}
-        <View style={{ height: 120 }} />
+          {!list ? (
+            <SongRowsSkeleton n={6} />
+          ) : !list.length ? (
+            <Text variant="callout" color={colors.text2} style={{ paddingVertical: 24 }}>
+              {query
+                ? `Nothing turned up for “${query}”. Try the artist's name on its own.`
+                : "Start by searching for a song you love. Once you've been listening a while, your favourites show up here to pick from."}
+            </Text>
+          ) : (
+            <Animated.View entering={FadeIn.duration(200)}>
+              {list.map((s) => (
+                <PickRow key={s.id} song={s} picked={isPicked(s)} onPress={() => toggle(s)} />
+              ))}
+            </Animated.View>
+          )}
+          <View style={{ height: 120 }} />
         </Animated.View>
       </Screen>
 
-      <View style={{ position: "absolute", left: 16, right: 16, bottom: dock + 12 - insets.bottom + insets.bottom, borderRadius: 16, backgroundColor: "rgba(36,36,36,0.97)", padding: 10, flexDirection: "row", alignItems: "center", gap: 12, elevation: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
+      <View
+        style={{
+          position: "absolute",
+          left: 12,
+          right: 12,
+          bottom: dock + 10,
+          borderRadius: 22,
+          backgroundColor: "#242321",
+          padding: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          elevation: 16,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: "rgba(255,255,255,0.08)",
+        }}
+      >
         <View style={{ width: 48, height: 48, borderRadius: 8, overflow: "hidden" }}>
           <SpiceArt name={shownName} covers={picked.map((p) => p.artworkUrl).filter(Boolean) as string[]} label={false} />
         </View>
@@ -200,9 +260,16 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
             selectionColor={colors.accent}
             cursorColor={colors.accent}
             accessibilityLabel="Name (optional)"
-            style={{ color: colors.text, fontFamily: fonts[600], fontSize: 16, paddingVertical: 0, borderBottomWidth: nameFocus ? 1 : 0, borderColor: colors.borderStrong }}
+            style={{
+              color: colors.text,
+              fontFamily: fonts[600],
+              fontSize: 16,
+              paddingVertical: 0,
+              borderBottomWidth: nameFocus ? 1 : 0,
+              borderColor: colors.borderStrong,
+            }}
           />
-          <Text size={13} color={colors.text2}>
+          <Text variant="footnote" color={colors.text2}>
             {!picked.length ? "Pick a song to start" : picked.length < 3 ? "Add a couple more" : "Ready when you are"}
           </Text>
         </View>
@@ -211,10 +278,19 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
           disabled={!picked.length || busy}
           feedback="confirm"
           scaleTo={0.95}
-          style={{ height: 44, paddingHorizontal: 20, borderRadius: 999, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", gap: 8, opacity: !picked.length || busy ? 0.4 : 1 }}
+          style={{
+            height: 44,
+            paddingHorizontal: 20,
+            borderRadius: 999,
+            backgroundColor: colors.accent,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            opacity: !picked.length || busy ? 0.4 : 1,
+          }}
         >
           {busy ? <Spinner size={18} color={colors.accentInk} /> : <Icon name="spice" size={18} color={colors.accentInk} />}
-          <Text weight={600} color={colors.accentInk}>
+          <Text variant="callout" weight={600} color={colors.accentInk}>
             {spice ? "Save" : "Make it"}
           </Text>
         </Press>
@@ -225,21 +301,43 @@ export function SeedPicker({ spice }: { spice?: Spice }) {
 
 function PickRow({ song, picked, onPress }: { song: Song; picked: boolean; onPress: () => void }) {
   return (
-    <Press onPress={onPress} feedback={false} scaleTo={0.985} ripple style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 8, paddingHorizontal: 12, marginHorizontal: -12, borderRadius: 12, overflow: "hidden" }}>
-      <Artwork url={song.artworkUrl} size={44} radius={8} />
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text weight={500} numberOfLines={1} style={{ flexShrink: 1 }}>
-            {song.title}
+    <Press
+      onPress={onPress}
+      feedback={false}
+      scaleTo={1}
+      highlight="rgba(255,255,255,0.06)"
+      style={{ flexDirection: "row", alignItems: "center", gap: 14, minHeight: 64, paddingHorizontal: 20, marginHorizontal: -20 }}
+    >
+      <Artwork url={song.artworkUrl} size={48} radius={6} />
+      <View style={{ flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text variant="callout" weight={500} numberOfLines={1} style={{ flexShrink: 1 }}>
+              {song.title}
+            </Text>
+            {song.explicit ? <ExplicitBadge /> : null}
+          </View>
+          <Text variant="subhead" color={colors.text2} numberOfLines={1}>
+            {song.artists.map((a) => a.name).join(", ")}
           </Text>
-          {song.explicit ? <ExplicitBadge /> : null}
         </View>
-        <Text size={13} color={colors.text2} numberOfLines={1}>
-          {song.artists.map((a) => a.name).join(", ")}
-        </Text>
-      </View>
-      <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: picked ? colors.accent : "transparent", borderWidth: picked ? 0 : 1.5, borderColor: colors.borderStrong }}>
-        <Icon name={picked ? "check" : "plus"} size={16} color={picked ? colors.accentInk : colors.text2} />
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: picked ? colors.tint : "transparent",
+            borderWidth: picked ? 0 : 1.5,
+            borderColor: colors.text3,
+          }}
+        >
+          <Icon name={picked ? "check" : "plus"} size={15} color={picked ? colors.accentInk : colors.text2} />
+        </View>
+        <View
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }}
+        />
       </View>
     </Press>
   );

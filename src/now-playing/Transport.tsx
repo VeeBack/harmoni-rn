@@ -145,7 +145,7 @@ export function Controls() {
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 14 }}>
       <Toggle on={pb.shuffle} icon="shuffle" label={pb.shuffle ? "Shuffle on" : "Shuffle"} onPress={() => player.setShuffle(!pb.shuffle)} />
       <Press disabled={none} onPress={() => player.prev()} scaleTo={0.88} accessibilityLabel="Previous" style={{ padding: 4, opacity: none ? 0.35 : 1 }}>
-        <Icon name="prev" size={36} color={W(0.8)} />
+        <Icon name="prev" size={44} color={W(0.92)} />
       </Press>
       <Press
         disabled={none}
@@ -153,12 +153,12 @@ export function Controls() {
         feedback={pb.playing ? "toggleOff" : "toggleOn"}
         scaleTo={0.9}
         accessibilityLabel={pb.buffering && pb.playing ? "Loading" : pb.playing ? "Pause" : "Play"}
-        style={{ width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", opacity: none ? 0.35 : 1 }}
+        style={{ width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", opacity: none ? 0.35 : 1 }}
       >
-        {pb.buffering && pb.playing ? <Spinner size={40} color="#fff" /> : <Icon name={pb.playing ? "pause" : "play"} size={48} color="#fff" />}
+        {pb.buffering && pb.playing ? <Spinner size={44} color="#fff" /> : <Icon name={pb.playing ? "pause" : "play"} size={60} color="#fff" />}
       </Press>
       <Press disabled={none} onPress={() => player.next()} scaleTo={0.88} accessibilityLabel="Next" style={{ padding: 4, opacity: none ? 0.35 : 1 }}>
-        <Icon name="next" size={36} color={W(0.8)} />
+        <Icon name="next" size={44} color={W(0.92)} />
       </Press>
       <Toggle
         on={pb.repeat !== "off"}

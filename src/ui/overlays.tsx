@@ -128,6 +128,12 @@ function DialogHost() {
       haptic.tick();
     }
   }, [dialog]);
+  const close = (v: string | boolean | undefined) => {
+    if (!dialog) return;
+    Keyboard.dismiss();
+    dialog.resolve(v);
+    useDialog.setState({ dialog: null });
+  };
   useEffect(() => {
     if (!dialog) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -136,12 +142,6 @@ function DialogHost() {
     });
     return () => sub.remove();
   });
-  const close = (v: string | boolean | undefined) => {
-    if (!dialog) return;
-    Keyboard.dismiss();
-    dialog.resolve(v);
-    useDialog.setState({ dialog: null });
-  };
   const trimmed = value.trim();
   const disabled = !!dialog?.field && !trimmed;
   return dialog ? (

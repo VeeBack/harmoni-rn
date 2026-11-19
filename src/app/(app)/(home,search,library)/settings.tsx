@@ -6,7 +6,7 @@ import { File } from "expo-file-system";
 import * as WebBrowser from "expo-web-browser";
 import Native from "harmoni-player";
 import { useEffect, useState, type ReactNode } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { errorMessage, serverOrigin } from "@/api/client";
 import { Api } from "@/api/endpoints";
@@ -24,49 +24,53 @@ import { SmallButton, Switch } from "@/ui/bits";
 import { Icon, type IconName } from "@/ui/Icon";
 import { confirm, prompt, toast } from "@/ui/overlays";
 import { IconButton, Press } from "@/ui/Press";
-import { PageTitle, Screen } from "@/ui/Screen";
+import { Screen } from "@/ui/Screen";
 import { Stepper } from "@/ui/Stepper";
 import { Text } from "@/ui/Text";
 import { colors, radius } from "@/ui/theme";
 
+/** An inset grouped section: a header, the rows in a rounded card, and a footnote under it. */
 function Group({ title, note, children }: { title: ReactNode; note?: ReactNode; children: ReactNode }) {
   return (
-    <View style={{ marginTop: 36 }}>
-      <Text size={18} weight={600} style={{ letterSpacing: -0.18, marginHorizontal: 4, marginBottom: note ? 4 : 10 }}>
+    <View style={{ marginTop: 32 }}>
+      <Text variant="title3" weight={600} style={{ marginHorizontal: 4, marginBottom: 10 }}>
         {title}
       </Text>
+      <View style={{ backgroundColor: colors.surface, borderRadius: 18, overflow: "hidden" }}>{children}</View>
       {note ? (
-        <Text size={13} color={colors.text2} style={{ marginHorizontal: 4, marginBottom: 12, lineHeight: 19 }}>
+        <Text variant="footnote" color={colors.text2} style={{ marginHorizontal: 16, marginTop: 8 }}>
           {note}
         </Text>
       ) : null}
-      <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, overflow: "hidden" }}>{children}</View>
     </View>
   );
 }
 
 function Row({ title, note, children, first, onPress, icon }: { title: ReactNode; note?: ReactNode; children?: ReactNode; first?: boolean; onPress?: () => void; icon?: IconName }) {
   const body = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: 16, minHeight: 64, borderTopWidth: first ? 0 : 1, borderColor: colors.border }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingLeft: 16, minHeight: 52 }}>
       {icon ? (
-        <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center" }}>
-          <Icon name={icon} size={20} color={colors.text2} />
+        <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: "rgba(242,221,191,0.12)", alignItems: "center", justifyContent: "center" }}>
+          <Icon name={icon} size={18} color={colors.tint} />
         </View>
       ) : null}
-      <View style={{ flex: 1 }}>
-        <Text weight={500}>{title}</Text>
-        {note ? (
-          <Text size={13} color={colors.text2} style={{ marginTop: 2, lineHeight: 19 }}>
-            {note}
-          </Text>
-        ) : null}
+      <View style={{ flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 16, paddingVertical: 11 }}>
+        {first ? null : <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />}
+        <View style={{ flex: 1, gap: 2 }}>
+          {typeof title === "string" ? <Text variant="body">{title}</Text> : title}
+          {note ? (
+            <Text variant="footnote" color={colors.text2}>
+              {note}
+            </Text>
+          ) : null}
+        </View>
+        {children}
+        {onPress ? <Icon name="chevron-right" size={17} color={colors.text3} /> : null}
       </View>
-      {children}
-      {onPress ? <Icon name="arrow-right" size={20} color={colors.text3} /> : null}
     </View>
   );
   return onPress ? (
-    <Press onPress={onPress} feedback="tap" scaleTo={0.99} ripple>
+    <Press onPress={onPress} feedback={false} scaleTo={1} highlight="rgba(255,255,255,0.06)">
       {body}
     </Press>
   ) : (
@@ -106,8 +110,7 @@ export default function Settings() {
   };
 
   return (
-    <Screen back title="Settings" titleAt={60}>
-      <PageTitle subtitle="Make Harmoni yours.">Settings</PageTitle>
+    <Screen back title="Settings" large>
 
       <Group title="Your account">
         <Row first title={me?.name ?? "…"} note={me ? `@${me.username}${me.role === "admin" ? " · Admin" : ""}` : undefined}>

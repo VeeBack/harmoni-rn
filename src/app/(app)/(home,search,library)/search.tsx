@@ -57,15 +57,16 @@ export default function Search() {
   }, [query]);
 
   const field = (
-    <View style={{ flex: 1, height: 40, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", paddingLeft: 18, paddingRight: 8 }}>
+    <View style={{ height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)", flexDirection: "row", alignItems: "center", paddingLeft: 10, paddingRight: 6, gap: 6 }}>
+      <Icon name="search" size={17} color={colors.text2} />
       <TextInput
         ref={input}
         value={text}
         onChangeText={setText}
-        placeholder="Search songs, artists…"
+        placeholder="Songs, artists, lyrics and more"
         placeholderTextColor={colors.text3}
-        selectionColor={colors.accent}
-        cursorColor={colors.accent}
+        selectionColor={colors.tint}
+        cursorColor={colors.tint}
         returnKeyType="search"
         autoCorrect={false}
         autoCapitalize="none"
@@ -74,22 +75,30 @@ export default function Search() {
           setQuery(text.trim());
           Keyboard.dismiss();
         }}
-        style={{ flex: 1, color: colors.text, fontFamily: fonts[400], fontSize: 16, paddingVertical: 0 }}
+        style={{ flex: 1, color: colors.text, fontFamily: fonts[400], fontSize: 17, paddingVertical: 0 }}
       />
       {text ? (
-        <Press onPress={() => { setText(""); input.current?.focus(); }} feedback="tap" scaleTo={0.85} hitSlop={8} accessibilityLabel="Clear" style={{ padding: 6 }}>
-          <Icon name="close" size={18} color={colors.text2} />
+        <Press
+          onPress={() => {
+            setText("");
+            input.current?.focus();
+          }}
+          feedback="tap"
+          scaleTo={0.85}
+          hitSlop={10}
+          accessibilityLabel="Clear"
+          style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+        >
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.text3, alignItems: "center", justifyContent: "center" }}>
+            <Icon name="close" size={11} color={colors.bg} />
+          </View>
         </Press>
-      ) : (
-        <View style={{ padding: 6 }}>
-          <Icon name="search" size={18} color={colors.text2} />
-        </View>
-      )}
+      ) : null}
     </View>
   );
 
   return (
-    <Screen tab="(search)" topBar={<TopBar center={field} />} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
+    <Screen tab="(search)" topBar={<TopBar fill={field} alwaysSolid />} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
       {!state ? (
         <View>
           <PageTitle subtitle="What are you in the mood for?">Search</PageTitle>

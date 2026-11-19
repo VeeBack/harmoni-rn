@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { Easing, makeMutable, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 
 import { haptic } from "@/lib/haptics";
 import { Button } from "./Button";
@@ -63,13 +64,38 @@ export function EmptyState({ title, body, action, onAction, icon }: { title: str
 }
 
 /** A placeholder in the shape of what's coming, breathing softly (iOS redaction). */
+/** One clock for every skeleton on screen, so they shimmer together. */
+const shimmer = makeMutable(0);
+let shimmering = false;
+
+/**
+ * A placeholder: a quiet fill with a soft band of light sweeping across it, in
+ * step with every other placeholder on the page.
+ */
 export function Skeleton({ width = "100%", height = 14, radius: r = 8, style, round, delay = 0 }: { width?: DimensionValue; height?: DimensionValue; radius?: number; style?: StyleProp<ViewStyle>; round?: boolean; delay?: number }) {
-  const o = useSharedValue(0.5);
+  const w = useSharedValue(0);
   useEffect(() => {
-    o.value = withDelay(delay, withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true));
-  }, [o, delay]);
-  const anim = useAnimatedStyle(() => ({ opacity: 0.45 + o.value * 0.4 }));
-  return <Animated.View style={[{ width, height, borderRadius: round ? 9999 : r, backgroundColor: colors.surface2 }, anim, style]} />;
+    if (shimmering) return;
+    shimmering = true;
+    shimmer.value = withRepeat(withSequence(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.cubic) }), withTiming(1, { duration: 450 })), -1, false);
+  }, []);
+  // Later rows lag a little, so the light seems to travel down the page.
+  const lag = Math.min(0.3, delay / 1000);
+  const sweep = useAnimatedStyle(() => {
+    const p = Math.min(1, Math.max(0, (shimmer.value - lag) / (1 - lag)));
+    const band = Math.max(80, w.value * 0.7);
+    return { width: band, transform: [{ translateX: -band + p * (w.value + band) }] };
+  });
+  return (
+    <View
+      onLayout={(e) => (w.value = e.nativeEvent.layout.width)}
+      style={[{ width, height, borderRadius: round ? 9999 : r, backgroundColor: colors.surface2, overflow: "hidden" }, style]}
+    >
+      <Animated.View style={[{ position: "absolute", top: 0, bottom: 0, left: 0 }, sweep]}>
+        <LinearGradient colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.055)", "rgba(255,255,255,0)"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+      </Animated.View>
+    </View>
+  );
 }
 
 export function SongRowsSkeleton({ n = 5 }: { n?: number }) {

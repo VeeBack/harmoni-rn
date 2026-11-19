@@ -334,14 +334,20 @@ function ArtStage({ song, quiet, pan }: { song: QueueSong; quiet?: string; pan: 
   const mini = { x: miniArtFrame.x, y: miniArtFrame.y, s: miniArtFrame.size };
   const artStyle = useAnimatedStyle(() => {
     const p = sheetProgress.value;
-    if (fx.value < 0 || mini.s <= 0 || p >= 1) return { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: scale.value }] };
+    // Scaled about the top-left (for the morph), so a paused artwork is moved back to the centre.
+    if (fx.value < 0 || mini.s <= 0 || p >= 1) {
+      const c = ((1 - scale.value) * art) / 2;
+      return { transform: [{ translateX: c }, { translateY: c }, { scale: scale.value }] };
+    }
     const off = (1 - p) * height;
     const dx = mini.x + (fx.value - mini.x) * p;
     const dy = mini.y + (fy.value - mini.y) * p;
     const ds = mini.s + (fs.value - mini.s) * p;
     const k = ds / fs.value;
+    const sEff = scale.value + (1 - scale.value) * (1 - p);
+    const c = ((1 - sEff) * ds) / 2;
     return {
-      transform: [{ translateX: dx - fx.value }, { translateY: dy - (fy.value + off) }, { scale: k * (scale.value + (1 - scale.value) * (1 - p)) }],
+      transform: [{ translateX: dx - fx.value + c }, { translateY: dy - (fy.value + off) + c }, { scale: k * sEff }],
     };
   });
   const artRadius = useAnimatedStyle(() => ({ borderRadius: interpolate(sheetProgress.value, [0, 1], [8 * (fs.value / Math.max(1, mini.s)), 12], "clamp") }));

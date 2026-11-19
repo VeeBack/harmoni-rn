@@ -1,8 +1,24 @@
 import { BlurTargetView } from "expo-blur";
 import { router } from "expo-router";
-import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, type ComponentRef, type ReactNode, type RefObject } from "react";
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type ComponentRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { RefreshControl, StyleSheet, View, type ScrollViewProps } from "react-native";
-import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
+import Animated, {
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { registerScrollToTop } from "@/shell/state";
@@ -33,7 +49,10 @@ export function TopBar({
   avatar = !back,
   target,
   alwaysSolid,
+  fill,
 }: {
+  /** Fills the bar, left to right (a search field). */
+  fill?: ReactNode;
   back?: boolean;
   title?: string;
   scrollY?: SharedValue<number>;
@@ -49,7 +68,9 @@ export function TopBar({
   const ctxTarget = useContext(BlurTargetContext);
   const blurTarget = target ?? ctxTarget;
   const me = useSession((s) => s.me);
-  const barStyle = useAnimatedStyle(() => ({ opacity: alwaysSolid ? 1 : scrollY ? interpolate(scrollY.value, [0, 14], [0, 1], "clamp") : 0 }));
+  const barStyle = useAnimatedStyle(() => ({
+    opacity: alwaysSolid ? 1 : scrollY ? interpolate(scrollY.value, [0, 14], [0, 1], "clamp") : 0,
+  }));
   const titleStyle = useAnimatedStyle(() => {
     if (!scrollY || !title) return { opacity: 0 };
     return {
@@ -63,39 +84,53 @@ export function TopBar({
         <Material target={blurTarget ?? undefined} />
         <View style={styles.hairline} />
       </Animated.View>
-      <View style={styles.side}>
-        {back ? (
-          <Press
-            onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            scaleTo={1}
-            dim
-            hitSlop={12}
-            style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
-          >
-            <Icon name="chevron-left" size={26} color={colors.tint} />
-          </Press>
-        ) : null}
-      </View>
-      <View pointerEvents="box-none" style={styles.middle}>
-        {center ??
-          (title ? (
-            <Animated.View style={titleStyle} pointerEvents="none">
-              <Text variant="headline" numberOfLines={1} align="center">
-                {title}
-              </Text>
-            </Animated.View>
-          ) : null)}
-      </View>
-      <View style={[styles.side, { justifyContent: "flex-end", gap: 4 }]}>
+      {fill ? (
+        <View style={{ flex: 1 }}>{fill}</View>
+      ) : (
+        <View style={styles.side}>
+          {back ? (
+            <Press
+              onPress={() => (router.canGoBack() ? router.back() : router.navigate("/"))}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              scaleTo={1}
+              dim
+              hitSlop={12}
+              style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+            >
+              <Icon name="chevron-left" size={26} color={colors.tint} />
+            </Press>
+          ) : null}
+        </View>
+      )}
+      {fill ? null : (
+        <View pointerEvents="box-none" style={styles.middle}>
+          {center ??
+            (title ? (
+              <Animated.View style={titleStyle} pointerEvents="none">
+                <Text variant="headline" numberOfLines={1} align="center">
+                  {title}
+                </Text>
+              </Animated.View>
+            ) : null)}
+        </View>
+      )}
+      <View style={[styles.side, fill ? { minWidth: 0 } : null, { justifyContent: "flex-end", gap: 4 }]}>
         {right}
         {avatar ? (
           <Press
             onPress={() => router.navigate("/settings")}
             accessibilityLabel="Settings"
             scaleTo={0.9}
-            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center", marginLeft: 6 }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: colors.surface3,
+              alignItems: "center",
+              justifyContent: "center",
+              marginLeft: 6,
+            }}
           >
             <Text variant="subhead" weight={600} color={colors.text}>
               {me?.name?.trim()?.[0]?.toUpperCase() ?? "·"}
@@ -130,7 +165,25 @@ export const Screen = forwardRef<
     right?: ReactNode;
     scrollY?: SharedValue<number>;
   } & Pick<ScrollViewProps, "keyboardShouldPersistTaps" | "onScrollBeginDrag">
->(function Screen({ children, back, title, large, titleAt, tab, refreshing, onRefresh, padded = true, bleedTop, topBar, right, scrollY: externalY, ...rest }, ref) {
+>(function Screen(
+  {
+    children,
+    back,
+    title,
+    large,
+    titleAt,
+    tab,
+    refreshing,
+    onRefresh,
+    padded = true,
+    bleedTop,
+    topBar,
+    right,
+    scrollY: externalY,
+    ...rest
+  },
+  ref,
+) {
   const insets = useSafeAreaInsets();
   const bottom = useContentBottom();
   const scroll = useRef<Animated.ScrollView>(null);
@@ -163,7 +216,14 @@ export const Screen = forwardRef<
             showsVerticalScrollIndicator={false}
             refreshControl={
               onRefresh ? (
-                <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} progressViewOffset={insets.top + TOPBAR} tintColor={colors.accent} colors={[colors.accentInk]} progressBackgroundColor={colors.accent} />
+                <RefreshControl
+                  refreshing={!!refreshing}
+                  onRefresh={onRefresh}
+                  progressViewOffset={insets.top + TOPBAR}
+                  tintColor={colors.accent}
+                  colors={[colors.accentInk]}
+                  progressBackgroundColor={colors.accent}
+                />
               ) : undefined
             }
             contentContainerStyle={{

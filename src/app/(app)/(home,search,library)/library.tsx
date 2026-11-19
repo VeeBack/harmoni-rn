@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { Api } from "@/api/endpoints";
 import { useDownloads } from "@/downloads/downloads";
@@ -11,7 +11,7 @@ import { EmptyState, Section, Skeleton, SmallButton } from "@/ui/bits";
 import { Icon, type IconName } from "@/ui/Icon";
 import { openMenu, prompt, toast } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
-import { PageTitle, Screen } from "@/ui/Screen";
+import { Screen } from "@/ui/Screen";
 import { Text } from "@/ui/Text";
 import { colors } from "@/ui/theme";
 
@@ -62,11 +62,11 @@ export default function Library() {
         spices.refetch();
       }}
     >
-      <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: colors.border }}>
+      <View style={{ marginTop: 4 }}>
         <Row icon="heart" label="Liked Songs" onPress={() => router.push("/liked")} />
         <Row icon="history" label="Recently Played" onPress={() => router.push("/recent")} />
         <Row icon="download" label="Downloads" detail={downloads ? plural(downloads, "song") : undefined} onPress={() => router.push("/downloads")} />
-        <Row icon="settings" label="Settings" onPress={() => router.push("/settings")} />
+        <Row icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
       </View>
       <Section title="Playlists" action={<SmallButton label="New" icon="plus" accessibilityLabel="New playlist or Spice" onPress={openNewMenu} />}>
         {loading ? (
@@ -93,19 +93,28 @@ export default function Library() {
   );
 }
 
-function Row({ icon, label, detail, onPress }: { icon: IconName; label: string; detail?: string; onPress: () => void }) {
+function Row({ icon, label, detail, onPress, last }: { icon: IconName; label: string; detail?: string; onPress: () => void; last?: boolean }) {
   return (
-    <Press onPress={onPress} feedback="tap" scaleTo={0.99} ripple style={{ minHeight: 56, flexDirection: "row", alignItems: "center", gap: 16, borderBottomWidth: 1, borderColor: colors.border }}>
-      <Icon name={icon} size={24} color={colors.accent} />
-      <Text size={18} style={{ flex: 1 }}>
-        {label}
-      </Text>
-      {detail ? (
-        <Text size={13} color={colors.text3}>
-          {detail}
+    <Press onPress={onPress} feedback={false} scaleTo={1} highlight="rgba(255,255,255,0.06)" style={styles.row}>
+      <Icon name={icon} size={22} color={colors.tint} />
+      <View style={styles.rowBody}>
+        <Text variant="title3" weight={400} style={{ flex: 1 }}>
+          {label}
         </Text>
-      ) : null}
-      <Icon name="arrow-right" size={20} color={colors.text3} />
+        {detail ? (
+          <Text variant="subhead" color={colors.text3}>
+            {detail}
+          </Text>
+        ) : null}
+        <Icon name="chevron-right" size={17} color={colors.text3} />
+        {last ? null : <View style={styles.line} />}
+      </View>
     </Press>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 16, marginHorizontal: -20, paddingLeft: 20 },
+  rowBody: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 20 },
+  line: { position: "absolute", left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+});
