@@ -5,12 +5,9 @@ import { Api } from "@/api/endpoints";
 import { useDownloads } from "@/downloads/downloads";
 import { plural } from "@/lib/format";
 import { CardLink, SpiceCardLink, useGridWidth } from "@/song/cards";
-import { profilePath } from "@/lib/share";
-import { Avatar } from "@/profile/Avatar";
 import { DAILY_SPICE_HREF, useDailySpice } from "@/spice/daily";
 import { useSpiceDraft } from "@/spice/draft";
 import { libraryChanged, sortCollections, usePlaylists, useSharedPlaylists, useSpices } from "@/state/collections";
-import { useSession } from "@/state/session";
 import { EmptyState, Section, Skeleton, SmallButton } from "@/ui/bits";
 import { Icon, type IconName } from "@/ui/Icon";
 import { openMenu, prompt, toast } from "@/ui/overlays";
@@ -54,7 +51,6 @@ export default function Library() {
   const spices = useSpices();
   const shared = useSharedPlaylists();
   const daily = useDailySpice();
-  const me = useSession((st) => st.me);
   const w = useGridWidth();
   const downloads = useDownloads((s) => Object.values(s.items).filter((d) => d.state === "done").length);
   const cols = sortCollections(playlists.data, spices.data);
@@ -81,13 +77,6 @@ export default function Library() {
           detail={downloads ? plural(downloads, "song") : undefined}
           onPress={() => router.push("/downloads")}
         />
-        {me?.username ? (
-          <Row
-            leading={<Avatar name={me.name} url={me.avatarUrl} accent={me.accent} size={26} />}
-            label="Your profile"
-            onPress={() => router.push(profilePath(me.username) as never)}
-          />
-        ) : null}
         <Row icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
       </View>
       <Section

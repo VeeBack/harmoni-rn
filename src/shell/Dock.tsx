@@ -2,7 +2,17 @@ import type { BottomTabBarProps } from "expo-router/js-tabs";
 import { memo, useEffect, useRef, type ComponentRef, type RefObject } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, FadeInDown, FadeOutDown, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOutDown,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
@@ -48,7 +58,13 @@ export function Dock({ target }: { target: RefObject<ComponentRef<typeof View> |
   if (!props) return null;
   const { state, emitter, navigateToTab } = props;
   return (
-    <View pointerEvents="box-none" style={[styles.dock, { paddingBottom: insets.bottom }]}>
+    // The whole dock takes touches, down to the screen edge: a tap in a gap between its
+    // controls, or on Android's navigation handle below them, never reaches the list behind.
+    <View
+      onStartShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      style={[styles.dock, { paddingBottom: insets.bottom }]}
+    >
       <Material target={target} thick={false} intensity={80} />
       <View style={styles.hairline} />
       {song ? <MiniPlayer /> : null}
@@ -143,7 +159,10 @@ function MiniPlayer() {
     .onEnd(() => runOnJS(openNowPlaying)("art"));
   const gesture = Gesture.Exclusive(pan, tap);
 
-  const contentStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dx.value }], opacity: interpolate(Math.abs(dx.value), [0, 60], [1, 0.5], "clamp") }));
+  const contentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dx.value }],
+    opacity: interpolate(Math.abs(dx.value), [0, 60], [1, 0.5], "clamp"),
+  }));
   const cardStyle = useAnimatedStyle(() => ({
     backgroundColor: `rgba(255,255,255,${0.07 + pressed.value * 0.05})`,
     transform: [{ scale: 1 - pressed.value * 0.015 }],
@@ -189,8 +208,18 @@ function MiniPlayer() {
               )}
             </Animated.View>
           </Animated.View>
-          <Press onPress={() => player.toggle()} feedback={pb.playing ? "toggleOff" : "toggleOn"} accessibilityLabel={pb.buffering ? "Loading" : pb.playing ? "Pause" : "Play"} style={styles.miniBtn} scaleTo={0.82}>
-            {pb.buffering && pb.playing ? <Spinner size={22} color={colors.text} /> : <Icon name={pb.playing ? "pause" : "play"} size={28} />}
+          <Press
+            onPress={() => player.toggle()}
+            feedback={pb.playing ? "toggleOff" : "toggleOn"}
+            accessibilityLabel={pb.buffering ? "Loading" : pb.playing ? "Pause" : "Play"}
+            style={styles.miniBtn}
+            scaleTo={0.82}
+          >
+            {pb.buffering && pb.playing ? (
+              <Spinner size={22} color={colors.text} />
+            ) : (
+              <Icon name={pb.playing ? "pause" : "play"} size={28} />
+            )}
           </Press>
           <Press onPress={() => player.next()} accessibilityLabel="Next" style={styles.miniBtn} scaleTo={0.82}>
             <Icon name="next" size={26} />
@@ -240,6 +269,15 @@ const styles = StyleSheet.create({
   },
   miniArt: { borderRadius: 8, elevation: 6, shadowColor: "#000" },
   miniBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  progressTrack: { position: "absolute", left: 16, right: 16, bottom: 0, height: 2, borderRadius: 1, backgroundColor: "rgba(255,255,255,0.1)", overflow: "hidden" },
+  progressTrack: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
   progressFill: { height: 2, borderRadius: 1, backgroundColor: "rgba(255,255,255,0.7)" },
 });

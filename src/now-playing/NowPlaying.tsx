@@ -85,20 +85,24 @@ export function NowPlaying() {
     if (open && !pb.song) closeNowPlaying();
   }, [open, pb.song]);
 
-  const pan = Gesture.Pan()
-    .activeOffsetY(10)
-    .failOffsetX([-24, 24])
-    .onUpdate((e) => {
-      // Down follows the finger; up resists (rubber band).
-      y.value = e.translationY >= 0 ? e.translationY : -Math.sqrt(-e.translationY) * 3;
-    })
-    .onEnd((e) => {
-      if (e.translationY > 120 || (e.translationY > 24 && e.velocityY > 500)) {
-        flick.value = e.velocityY;
-        runOnJS(haptic.gestureEnd)();
-        runOnJS(closeNowPlaying)();
-      } else y.value = withSpring(0, { ...spring.bouncy, velocity: e.velocityY });
-    });
+  // Swipe down anywhere outside the lyrics and queue to close. Each area gets its own
+  // gesture: one gesture shared between several detectors only works in one of them.
+  const makePan = () =>
+    Gesture.Pan()
+      .activeOffsetY(10)
+      .failOffsetX([-24, 24])
+      .onUpdate((e) => {
+        // Down follows the finger; up resists (rubber band).
+        y.value = e.translationY >= 0 ? e.translationY : -Math.sqrt(-e.translationY) * 3;
+      })
+      .onEnd((e) => {
+        if (e.translationY > 120 || (e.translationY > 24 && e.velocityY > 500)) {
+          flick.value = e.velocityY;
+          runOnJS(haptic.gestureEnd)();
+          runOnJS(closeNowPlaying)();
+        } else y.value = withSpring(0, { ...spring.bouncy, velocity: e.velocityY });
+      });
+  const pans: Pans = { grab: makePan(), head: makePan(), art: makePan(), bar: makePan() };
 
   const sheet = useAnimatedStyle(() => {
     const p = Math.max(0, Math.min(1, 1 - y.value / height));
@@ -119,7 +123,7 @@ export function NowPlaying() {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 40, overflow: "hidden" }, sheet]}>
       <StatusBar style="light" />
-      <Sheet pan={pan} song={pb.song} />
+      <Sheet pans={pans} song={pb.song} />
     </Animated.View>
   );
 }
@@ -129,7 +133,9 @@ const PANEL = { duration: 620, dampingRatio: 0.86 };
 /** Where the small artwork sits beside the title in the lyrics and queue views (window coordinates, sheet open). */
 type Frame = { x: SharedValue<number>; y: SharedValue<number>; s: SharedValue<number> };
 
-function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: QueueSong }) {
+type Pans = Record<"grab" | "head" | "art" | "bar", ReturnType<typeof Gesture.Pan>>;
+
+function Sheet({ pans, song }: { pans: Pans; song: QueueSong }) {
   const insets = useSafeAreaInsets();
   const view = useNowPlaying((s) => s.view);
   const theme = useArtworkColors(song.artworkUrl);
@@ -189,7 +195,7 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
   return (
     <View onTouchStart={wake} style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, overflow: "hidden" }}>
       <Backdrop art={song.artworkUrl} theme={theme} />
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={pans.grab}>
         <View>
           <Press
             onPress={closeNowPlaying}
@@ -206,7 +212,7 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
       <View style={{ flex: 1 }}>
         {/* Lyrics and queue, under a header with the song. */}
         <View style={StyleSheet.absoluteFill} pointerEvents={shown === "art" ? "none" : "box-none"}>
-          <GestureDetector gesture={pan}>
+          <GestureDetector gesture={pans.head}>
             <View>
               <CompactHeader song={song} panel={panel} frame={compact} />
             </View>
@@ -269,7 +275,7 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
 
         {/* The artwork, its title and buttons. In the other views only the artwork stays, small, by the title. */}
         <View style={StyleSheet.absoluteFill} pointerEvents={shown === "art" ? "box-none" : "none"}>
-          <GestureDetector gesture={pan}>
+          <GestureDetector gesture={pans.art}>
             <View style={{ flex: 1 }}>
               <ArtStage
                 song={song}
@@ -282,9 +288,9 @@ function Sheet({ pan, song }: { pan: ReturnType<typeof Gesture.Pan>; song: Queue
         </View>
       </View>
 
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={pans.bar}>
         <View style={{ paddingHorizontal: 28 }}>
-          <Progress sheetPan={pan} />
+          <Progress sheetPan={pans.bar} />
           <Animated.View style={chromeStyle} pointerEvents={isIdle ? "none" : "auto"}>
             <Controls />
           </Animated.View>
