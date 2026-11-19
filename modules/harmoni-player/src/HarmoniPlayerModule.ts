@@ -81,7 +81,21 @@ type Events = {
     muted?: boolean;
   }) => void;
   onSystemTransfer: (e: { to: string | null }) => void;
+  onUpdate: (e: UpdateEvent) => void;
 };
+
+/** Where downloading or installing an app update has got to (see Updater.kt). */
+export interface UpdateEvent {
+  state: "idle" | "downloading" | "verifying" | "ready" | "installing" | "confirming" | "installed" | "failed";
+  version?: string;
+  path?: string;
+  received?: number;
+  total?: number;
+  message?: string;
+  detail?: string | null;
+  /** Ready again because they cancelled Android's install prompt. */
+  cancelled?: boolean;
+}
 
 declare class HarmoniPlayerModule extends NativeModule<Events> {
   getSession(): { server: string; issuer: string; apiBase: string; clientId: string } | null;
@@ -119,6 +133,25 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   linksEnabled(): boolean;
   /** Opens the app's "Open by default" settings, where links can be turned on. */
   openLinkSettings(): boolean;
+  /** The latest update event (to catch up after a screen opens mid-download). */
+  updateState(): UpdateEvent;
+  /** The checked APK for `version`, if it has been downloaded. */
+  updateReady(version: string): string | null;
+  /** Downloads in the background (resuming), checks the SHA-256, then sends `ready`. Once per version at a time. */
+  downloadUpdate(url: string, version: string, sha256: string | null, size: number): void;
+  cancelUpdate(): void;
+  /** Whether Android lets Harmoni install apps ("Install unknown apps"). */
+  canInstallUpdates(): boolean;
+  /** Opens the "Install unknown apps" switch for Harmoni. */
+  openInstallPermission(): boolean;
+  /** Hands the APK to Android's installer, which closes and replaces the app. */
+  installUpdate(path: string, version: string): Promise<"started" | "permission" | "missing" | "failed">;
+  /** The version this app just updated itself to, once; null otherwise. */
+  takeUpdated(): string | null;
+  /** Whether the connection costs money (mobile data, a hotspot). */
+  networkMetered(): boolean;
+  /** The package that installed Harmoni (a store, Obtainium, the package installer), if Android says. */
+  installer(): string | null;
   setRemote(json: string | null): Promise<void>;
   setLinkDevices(json: string, active: string | null, volume: number): void;
 

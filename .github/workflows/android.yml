@@ -1,7 +1,8 @@
 name: Android
 
 # Every push to main builds an installable APK and publishes it as a GitHub
-# Release tagged v1.0.<run number>, which Obtainium can follow for updates.
+# Release tagged v1.0.<run number>. The app finds these and updates itself
+# (Obtainium can follow them too).
 # Pull requests build too (Actions › the run › Artifacts) but don't release.
 on:
   push:
@@ -31,8 +32,12 @@ jobs:
       # Release signing (optional): add these repository secrets to sign with your own key.
       # Without them the APK is signed with the shared debug key, which is fine for testing.
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # The app updates itself from this repository's releases (src/update).
+      EXPO_PUBLIC_UPDATE_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # history and tags, for the release notes
 
       - uses: actions/setup-java@v4
         with:
@@ -116,6 +121,21 @@ jobs:
           path: dist/*.apk
           if-no-files-found: error
 
+      - name: Release notes
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        # What changed since the last release, a commit subject a line. The app shows these
+        # as "What's new" when it offers the update.
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          notes="$RUNNER_TEMP/notes.md"
+          git log --no-merges --format='- %s' ${prev:+$prev..}HEAD | grep -v '\[skip ci\]' | grep -v '^- CI:' | head -30 > "$notes" || true
+          [ -s "$notes" ] || echo "- Small fixes and improvements" > "$notes"
+          if [ -n "$prev" ]; then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...v%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$prev" "$APP_VERSION" >> "$notes"
+          fi
+          cat "$notes"
+          echo "NOTES_FILE=$notes" >> "$GITHUB_ENV"
+
       - name: Release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -124,5 +144,5 @@ jobs:
           name: Harmoni ${{ env.APP_VERSION }}
           target_commitish: ${{ github.sha }}
           files: dist/*.apk
-          generate_release_notes: true
+          body_path: ${{ env.NOTES_FILE }}
           make_latest: true

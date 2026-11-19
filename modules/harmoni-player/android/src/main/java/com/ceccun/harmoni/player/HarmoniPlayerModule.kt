@@ -365,11 +365,12 @@ class HarmoniPlayerModule : Module() {
 
     Events(
       "onState", "onTick", "onTransition", "onTimeline", "onListen", "onPlayed",
-      "onError", "onRemoteLike", "onDownload", "onSignedOut", "onRemoteCommand", "onSystemTransfer",
+      "onError", "onRemoteLike", "onDownload", "onSignedOut", "onRemoteCommand", "onSystemTransfer", "onUpdate",
     )
 
     OnCreate {
       Core.init(context)
+      Updater.onEvent = { e -> main.post { sendEvent("onUpdate", e) } }
       AuthStore.onSignedOut = { sendEvent("onSignedOut", mapOf<String, Any?>()) }
       Core.onLikedChanged = { id, liked ->
         main.post {
@@ -401,6 +402,7 @@ class HarmoniPlayerModule : Module() {
     }
 
     OnDestroy {
+      Updater.onEvent = null
       PlaybackService.playerListeners -= onNewPlayer
       main.removeCallbacks(tick)
       val p = attachedTo
@@ -601,14 +603,31 @@ class HarmoniPlayerModule : Module() {
       val uri = android.net.Uri.parse("package:${context.packageName}")
       val intent = if (Build.VERSION.SDK_INT >= 31) android.content.Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, uri)
       else android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
-      intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      // From the activity, so Back returns to Harmoni.
+      val from = appContext.currentActivity
+      if (from == null) intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
       try {
-        context.startActivity(intent)
+        (from ?: context).startActivity(intent)
         true
       } catch (_: Exception) {
         false
       }
     }
+
+    // --- updating from GitHub Releases (Updater.kt) ---
+
+    Function("updateState") { Updater.last }
+    Function("updateReady") { version: String -> Updater.ready(context, version) }
+    Function("downloadUpdate") { url: String, version: String, sha256: String?, size: Double ->
+      Updater.download(context, url, version, sha256, size.toLong())
+    }
+    Function("cancelUpdate") { Updater.cancel() }
+    Function("canInstallUpdates") { Updater.canInstall(context) }
+    Function("openInstallPermission") { Updater.openInstallPermission(appContext.currentActivity ?: context) }
+    AsyncFunction("installUpdate") { path: String, version: String -> Updater.install(context, path, version) }
+    Function("takeUpdated") { Updater.takeUpdated(context) }
+    Function("networkMetered") { Updater.metered(context) }
+    Function("installer") { Updater.installer(context) }
 
     // 0..1, how hard the bass is hitting in what's coming out of the speaker now. Cheap: polled every frame.
     Function("bass") { BassMeter.current?.level() ?: 0f }

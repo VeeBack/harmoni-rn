@@ -13,6 +13,7 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 - **Sleep timer** (minutes, or "end of this song"), **crossfade** (0–12 s, equal-power like the web), smooth play/pause, and the phone's **equalizer**.
 - Resumes where you left off after the app is closed or the phone restarts.
 - **A backdrop that moves with the music.** `BassMeter` sits between ExoPlayer's audio renderer and the sink, low-passes each decoded buffer and lines it up with what's coming out of the speaker (no microphone permission, unlike `Visualizer`). Now Playing reads the next half second at a time and plays it out on the UI thread.
+- **Updates itself** from this repository's GitHub Releases, so testers don't need a store or Obtainium (see [Updates](#updates)).
 - **Links open in the app.** `https://<server>/u/…`, `/song/…`, `/playlist/…?key=…`, `/spice/…`, `/album/…` and `/artist/…` open the matching screen (see [Links](#links)).
 
 ## Layout
@@ -26,8 +27,9 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 | `src/link/` | Harmoni Link: the event stream, reports, commands, transfers. |
 | `src/now-playing/` | The full-screen player: backdrop, lyrics, queue, transport. |
 | `src/profile/` | Profiles (banners drawn with Skia from the person's colour, their fonts, editing in place), people, following and the playlist share sheet. |
+| `src/update/` | Updating from GitHub Releases: the check, the Software Update sheet, and the Updates rows in Settings. |
 | `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, menus, collection screens, Spice art, and the design system. |
-| `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `BassMeter`, `Downloads`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
+| `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `BassMeter`, `Downloads`, `Updater`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
 
 Two things worth knowing about the design:
 
@@ -69,11 +71,22 @@ That fingerprint is the shared debug key that builds are signed with until a sig
 
 `.github/workflows/android.yml` typechecks, runs the tests, and builds a release APK (arm64; run it by hand to add armv7) on every push to `main` and on pull requests. Builds from `main` are published as a GitHub Release tagged `v1.0.<run number>`; pull request builds are only in the run's **Artifacts**.
 
-- **Updates with [Obtainium](https://github.com/ImranR98/Obtainium).** The repository is private, so Obtainium needs a GitHub token that can read it: a fine-grained token with access to this repository and *Contents: Read-only* (or a classic token with `repo`). Put it in Obtainium's settings under GitHub, then add the app by its repository URL. Each release tag matches the app's version name, so Obtainium knows what's installed.
+- **The app updates itself from these releases** (see [Updates](#updates)). Each release's notes are the commit subjects since the last one (minus `CI:` and `[skip ci]` commits): the app shows them as "What's new", so write subjects for the people testing.
+- [Obtainium](https://github.com/ImranR98/Obtainium) can follow the releases too: add the app by its repository URL. Each release tag matches the app's version name, so it knows what's installed.
 
 - Each build's `versionCode` is the run number, so a newer APK installs over an older one.
 - **Signing.** Without secrets, APKs are signed with the shared debug key: fine for testing, not for handing out. To sign with your own key, create one once (`keytool -genkeypair -v -keystore harmoni.jks -alias harmoni -keyalg RSA -keysize 4096 -validity 10000`) and add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -i harmoni.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Switching keys means uninstalling the debug-signed app once. Keep the keystore safe: losing it means people can't update.
 - Locally, the same `HARMONI_KEYSTORE_FILE`, `HARMONI_KEYSTORE_PASSWORD`, `HARMONI_KEY_ALIAS` and `HARMONI_KEY_PASSWORD` environment variables sign `assembleRelease` (see `plugins/withReleaseSigning.js`).
+
+## Updates
+
+Builds installed from an APK (not a store) update themselves from this repository's GitHub Releases (`src/update/`, `modules/harmoni-player/.../Updater.kt`):
+
+1. When the app comes to the front, at most once an hour, it asks GitHub for the latest release (conditionally, so it rarely counts against GitHub's 60-an-hour limit) and compares its tag with the app's version name.
+2. On Wi‑Fi (any unmetered network) it downloads the APK in the background, resuming if interrupted, and checks it against the SHA-256 GitHub publishes. On mobile data it asks first, with the size. Settings → Updates has the switch for automatic downloads and a Check button.
+3. When the download is ready it offers the update in a sheet with the release notes, at most once a day per version. **Update Now** hands the APK to Android's package installer. The first time, Android asks to allow installs from Harmoni ("Install unknown apps"); the sheet sends people there and carries on when they come back. Android then asks to confirm (Android 12 and later can skip that once Harmoni itself installed the version on the phone), closes the app and replaces it, keeping the sign-in, downloads and settings. A notification ("Harmoni is up to date") opens the new version. Google Play Protect may first offer to scan the app ("App scan recommended"), as it does for any APK from outside the Play Store; **Scan app** or **More details → Install without scanning** both carry on.
+
+An update only installs over an APK signed with the same key, so switching from the shared debug key to your own (see Signing) means installing that first build by hand. Builds take the repository from `EXPO_PUBLIC_UPDATE_REPO` (CI sets it to the repository it runs in; locally it defaults to `ejaz4/harmoni-rn`). `EXPO_PUBLIC_UPDATES=0` turns updating off for a build. Development builds only check when you tap Check, unless `EXPO_PUBLIC_UPDATE_CHECKS=1`.
 
 ## Developing against a real server
 

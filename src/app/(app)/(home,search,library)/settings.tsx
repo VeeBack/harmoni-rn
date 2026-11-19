@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import * as Application from "expo-application";
 import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
@@ -27,9 +26,12 @@ import { Icon, type IconName } from "@/ui/Icon";
 import { confirm, prompt, toast } from "@/ui/overlays";
 import { IconButton, Press } from "@/ui/Press";
 import { Screen } from "@/ui/Screen";
+import { Spinner } from "@/ui/Spinner";
 import { Stepper } from "@/ui/Stepper";
 import { Text } from "@/ui/Text";
 import { colors, radius } from "@/ui/theme";
+import { openUpdateSheet, ProgressBar } from "@/update/UpdateSheet";
+import { checkForUpdate, currentBuild, currentVersion, downloadUpdate, retryUpdate, updatesHere, useUpdate } from "@/update/updater";
 
 /** An inset grouped section: a header, the rows in a rounded card, and a footnote under it. */
 function Group({ title, note, children }: { title: ReactNode; note?: ReactNode; children: ReactNode }) {
@@ -97,11 +99,13 @@ function Row({
         )}
         <View style={{ flex: 1, gap: 2 }}>
           {typeof title === "string" ? <Text variant="body">{title}</Text> : title}
-          {note ? (
+          {typeof note === "string" ? (
             <Text variant="footnote" color={colors.text2}>
               {note}
             </Text>
-          ) : null}
+          ) : (
+            (note ?? null)
+          )}
         </View>
         {children}
         {onPress ? <Icon name="chevron-right" size={17} color={colors.text3} /> : null}
@@ -302,11 +306,8 @@ export default function Settings() {
         ) : null}
         <LinksRow />
         <Row title="Server" note={serverOrigin()?.replace(/^https?:\/\//, "")} />
-        <Row
-          title="Version"
-          note={`Harmoni for Android ${Application.nativeApplicationVersion ?? ""} (${Application.nativeBuildVersion ?? ""})`}
-        />
       </Group>
+      <UpdatesGroup />
       <Text size={13} color={colors.text3} style={{ marginTop: 10, marginHorizontal: 4 }}>
         Harmoni on {me?.server.name ?? "your server"}
       </Text>
@@ -724,6 +725,80 @@ function ImportGroup() {
           </View>
         </>
       ) : null}
+    </Group>
+  );
+}
+
+function checkedAgo(at: number) {
+  const min = Math.round((Date.now() - at) / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `${h} hr ago` : shortDate(new Date(at).toISOString());
+}
+
+/** This version, whether there's a newer one (and getting it), and whether updates download by themselves. */
+function UpdatesGroup() {
+  const s = useUpdate();
+  const [auto, setAuto] = useKvSwitch("settings.autoUpdate", true);
+  const version = `Harmoni for Android ${currentVersion}${currentBuild ? ` (${currentBuild})` : ""}`;
+  if (!updatesHere()) {
+    return (
+      <Group title="Updates">
+        <Row first title="Version" note={version} />
+      </Group>
+    );
+  }
+  const r = s.release;
+  const pct = s.total ? Math.round((s.received / s.total) * 100) : 0;
+  let title = `Harmoni ${currentVersion}`;
+  let note: ReactNode = s.checkedAt ? `Up to date · checked ${checkedAgo(s.checkedAt)}` : "Look for a newer version.";
+  let action: ReactNode = <SmallButton label="Check" onPress={() => checkForUpdate({ manual: true })} />;
+  if (s.phase === "checking") {
+    note = "Checking…";
+    action = <Spinner size={20} color={colors.text2} />;
+  } else if (s.phase === "failed") {
+    title = r ? `Harmoni ${r.version}` : "Couldn't check for updates";
+    note = s.error;
+    action = <SmallButton label="Try Again" onPress={retryUpdate} />;
+  } else if (r && s.phase === "available") {
+    title = `Harmoni ${r.version} is out`;
+    note = `${bytes(r.size)} · you have ${currentVersion}`;
+    action = <SmallButton label="Get" onPress={openUpdateSheet} />;
+  } else if (r && (s.phase === "downloading" || s.phase === "verifying")) {
+    title = `Downloading Harmoni ${r.version}`;
+    note = (
+      <View style={{ gap: 8, paddingTop: 4 }}>
+        <ProgressBar value={s.total ? s.received / s.total : 0} />
+        <Text variant="footnote" color={colors.text2}>
+          {s.phase === "verifying" ? "Checking the download…" : `${bytes(s.received)} of ${bytes(s.total)} · ${pct}%`}
+        </Text>
+      </View>
+    );
+    action = null;
+  } else if (r && s.phase === "ready") {
+    title = `Harmoni ${r.version} is ready`;
+    note = `Downloaded · you have ${currentVersion}`;
+    action = <SmallButton label="Update" onPress={openUpdateSheet} />;
+  } else if (r && s.phase === "installing") {
+    title = `Updating to Harmoni ${r.version}`;
+    note = "Android is installing it.";
+    action = null; // the row opens the sheet, which can start again
+  }
+  return (
+    <Group title="Updates" note={`${version}. New versions come from Harmoni's releases on GitHub.`}>
+      <Row first title={title} note={note} onPress={r && !action ? openUpdateSheet : undefined}>
+        {action}
+      </Row>
+      <Row title="Download updates automatically" note="On Wi‑Fi. Harmoni still asks before it installs one.">
+        <Switch
+          value={auto}
+          onChange={(v) => {
+            setAuto(v);
+            if (v && s.phase === "available" && !Native.networkMetered()) downloadUpdate();
+          }}
+        />
+      </Row>
     </Group>
   );
 }

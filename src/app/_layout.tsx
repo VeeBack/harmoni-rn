@@ -11,6 +11,8 @@ import { restoreQueryCache, queryClient } from "@/state/query";
 import { useSession } from "@/state/session";
 import { OverlayHost } from "@/ui/overlays";
 import { colors } from "@/ui/theme";
+import { openUpdateSheet } from "@/update/UpdateSheet";
+import { startUpdater } from "@/update/updater";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
@@ -26,6 +28,8 @@ export default function RootLayout() {
   useEffect(() => {
     const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 60);
     importDevSession().then((ok) => ok && useSession.getState().didSignIn());
+    // Before signing in too: an old build that can't sign in can still update.
+    startUpdater(openUpdateSheet);
     return () => clearTimeout(t);
   }, []);
   return (
