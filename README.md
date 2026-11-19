@@ -47,7 +47,9 @@ For a release build: `cd android && ./gradlew :app:assembleRelease`. It needs a 
 
 ## CI: an APK on every push
 
-`.github/workflows/android.yml` typechecks, runs the tests, and builds a release APK (arm64 + armv7) on every push to `main` and on pull requests. Download it from the run's **Artifacts** on the Actions tab. Pushing a tag like `v1.2.0` also attaches the APK to a GitHub Release.
+`.github/workflows/android.yml` typechecks, runs the tests, and builds a release APK (arm64; run it by hand to add armv7) on every push to `main` and on pull requests. Builds from `main` are published as a GitHub Release tagged `v1.0.<run number>`; pull request builds are only in the run's **Artifacts**.
+
+- **Updates with [Obtainium](https://github.com/ImranR98/Obtainium).** The repository is private, so Obtainium needs a GitHub token that can read it: a fine-grained token with access to this repository and *Contents: Read-only* (or a classic token with `repo`). Put it in Obtainium's settings under GitHub, then add the app by its repository URL. Each release tag matches the app's version name, so Obtainium knows what's installed.
 
 - Each build's `versionCode` is the run number, so a newer APK installs over an older one.
 - **Signing.** Without secrets, APKs are signed with the shared debug key: fine for testing, not for handing out. To sign with your own key, create one once (`keytool -genkeypair -v -keystore harmoni.jks -alias harmoni -keyalg RSA -keysize 4096 -validity 10000`) and add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -i harmoni.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Switching keys means uninstalling the debug-signed app once. Keep the keystore safe: losing it means people can't update.
