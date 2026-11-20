@@ -45,7 +45,7 @@ export default function AlbumScreen() {
         a ? (
           <>
             {a.artists.map((ar, i) => (
-              <Text key={ar.id} variant="title3" weight={400} color={colors.tint} onPress={() => router.push(`/artist/${ar.id}`)}>
+              <Text key={ar.id} variant="footnote" weight={600} onPress={() => router.push(`/artist/${ar.id}`)}>
                 {i ? ", " : ""}
                 {ar.name}
               </Text>

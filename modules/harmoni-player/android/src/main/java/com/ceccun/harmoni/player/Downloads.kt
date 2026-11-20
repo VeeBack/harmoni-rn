@@ -43,10 +43,13 @@ object Downloads {
     DownloadManager(Core.app, Core.databaseProvider, Core.downloadCache, Core.authedHttp, Executors.newFixedThreadPool(3)).apply {
       maxParallelDownloads = PARALLEL
       minRetryCount = 5
-      requirements = Requirements(Requirements.NETWORK)
+      requirements = requirementsNow()
       addListener(lineListener)
     }
   }
+
+  /** Any connection, or only Wi-Fi (unmetered) when the person chose that. */
+  fun requirementsNow() = Requirements(if (Prefs.wifiOnlyDownloads) Requirements.NETWORK_UNMETERED else Requirements.NETWORK)
 
   val notifications by lazy { DownloadNotificationHelper(Core.app, CHANNEL) }
 
@@ -308,6 +311,7 @@ class HarmoniDownloadService : DownloadService(
     val fraction = if (total > 0) ((done + partial) / total).coerceIn(0.0, 1.0) else 0.0
     val title = if (total == 1) "Saving 1 song for offline" else "Saving songs for offline"
     val text = when {
+      notMetRequirements and Requirements.NETWORK_UNMETERED != 0 -> "Waiting for Wi-Fi"
       notMetRequirements != 0 -> "Waiting for a connection"
       total > 1 -> "${countFormat.format(done)} of ${countFormat.format(total)}"
       else -> inFlight.firstOrNull()?.let { runCatching { org.json.JSONObject(String(it.request.data)).optString("title") }.getOrNull() } ?: ""

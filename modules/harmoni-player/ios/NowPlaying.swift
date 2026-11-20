@@ -12,11 +12,7 @@ enum AudioSession {
     guard !configured else { return }
     configured = true
     let s = AVAudioSession.sharedInstance()
-    do {
-      try s.setCategory(.playback, mode: .default, policy: .longFormAudio)
-    } catch {
-      NSLog("HarmoniPlayer: audio session category failed: \(error)")
-    }
+    applyCategory()
     let nc = NotificationCenter.default
     nc.addObserver(forName: AVAudioSession.interruptionNotification, object: s, queue: .main) { note in
       guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -40,6 +36,21 @@ enum AudioSession {
       guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
             AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
       if Player.shared.playWhenReady { Player.shared.pauseNow() }
+    }
+  }
+
+  /// Music, or (Play alongside other apps) music that mixes with other apps' sound instead of
+  /// stopping it. iOS doesn't give a mixing app the lock screen's controls.
+  static func applyCategory() {
+    let s = AVAudioSession.sharedInstance()
+    do {
+      if Prefs.playAlongside {
+        try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      } else {
+        try s.setCategory(.playback, mode: .default, policy: .longFormAudio)
+      }
+    } catch {
+      NSLog("HarmoniPlayer: audio session category failed: \(error)")
     }
   }
 
@@ -238,6 +249,7 @@ final class NowPlaying {
     if e.artworkUrl == artworkUrl, let artwork { info[MPMediaItemPropertyArtwork] = artwork }
     center.nowPlayingInfo = info
     center.playbackState = playing ? .playing : .paused
+    c.likeCommand.isEnabled = Prefs.mediaHeart
     c.likeCommand.isActive = Core.isLiked(e.id)
     if e.artworkUrl != artworkUrl { loadArtwork(e.artworkUrl) }
   }

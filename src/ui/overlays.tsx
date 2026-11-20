@@ -6,6 +6,7 @@ import Animated, {
   FadeIn,
   FadeOut,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -304,12 +305,15 @@ function MenuHost() {
   const y = useSharedValue(height);
   const backdrop = useSharedValue(0);
   const sheetH = useRef(height * 0.6);
+  /** How far the list is scrolled, for the swipe to dismiss. */
+  const listY = useSharedValue(0);
   void version;
 
   useEffect(() => {
     if (menu) {
       setShown(menu);
       setStack([]);
+      listY.value = 0;
       y.value = sheetH.current + 80;
       backdrop.value = withTiming(1, { duration: 260 });
       y.value = withSpring(0, { duration: 480, dampingRatio: 0.9 });
@@ -332,9 +336,30 @@ function MenuHost() {
     return () => sub.remove();
   }, [menu, stack.length]);
 
+  // Swipe down to dismiss, but only from the top of the list: scrolled down,
+  // a drag down scrolls back up instead (the list and the swipe both want
+  // the same 8dp, so the swipe decides by hand rather than racing it).
+  const start = useSharedValue({ x: 0, y: 0 });
+  const onListScroll = useAnimatedScrollHandler((e) => {
+    listY.value = e.contentOffset.y;
+  });
   const pan = Gesture.Pan()
-    .activeOffsetY(8)
-    .failOffsetX([-20, 20])
+    .manualActivation(true)
+    .onTouchesDown((e) => {
+      const t = e.allTouches[0];
+      if (t) start.value = { x: t.absoluteX, y: t.absoluteY };
+    })
+    .onTouchesMove((e, state) => {
+      const t = e.allTouches[0];
+      if (!t) return;
+      const dx = t.absoluteX - start.value.x;
+      const dy = t.absoluteY - start.value.y;
+      if (Math.abs(dx) > 20 || dy < -8) state.fail();
+      else if (dy > 8) {
+        if (listY.value <= 0) state.activate();
+        else state.fail();
+      }
+    })
     .onUpdate((e) => {
       // Rubber band upwards, free downwards.
       y.value = e.translationY > 0 ? e.translationY : -Math.sqrt(-e.translationY) * 2;
@@ -377,7 +402,13 @@ function MenuHost() {
           style={[{ position: "absolute", left: 10, right: 10, bottom: 10 + insets.bottom, gap: 8 }, sheetStyle]}
         >
           <View style={[styles.sheet, { maxHeight: height * 0.72 - insets.top }]}>
-            <ScrollView bounces={false} overScrollMode="never" showsVerticalScrollIndicator={false}>
+            <Animated.ScrollView
+              bounces={false}
+              overScrollMode="never"
+              showsVerticalScrollIndicator={false}
+              onScroll={onListScroll}
+              scrollEventThrottle={16}
+            >
               <Animated.View key={stack.length} entering={FadeIn.duration(200)}>
                 {top ? (
                   <Pressable
@@ -429,7 +460,7 @@ function MenuHost() {
                   );
                 })}
               </Animated.View>
-            </ScrollView>
+            </Animated.ScrollView>
           </View>
           <Pressable
             onPress={closeMenu}

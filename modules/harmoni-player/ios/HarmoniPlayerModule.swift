@@ -154,6 +154,20 @@ public final class HarmoniPlayerModule: Module {
       DispatchQueue.main.async { Player.shared.smooth = on }
     }
 
+    // Settings the player and downloads need natively (Prefs): read, and set (applied at once).
+    Function("getPref") { (key: String) -> Bool in Prefs.get(key) }
+
+    Function("setPref") { (key: String, on: Bool) in
+      Prefs.set(key, on)
+      DispatchQueue.main.async {
+        switch key {
+        case "playAlongside": AudioSession.applyCategory()
+        case "mediaHeart": NowPlaying.shared.update()
+        default: break // wifiOnlyDownloads: read when each download starts
+        }
+      }
+    }
+
     Function("setCrossfade") { (seconds: Double) in
       let ms = min(max(0, seconds), 12) * 1000
       DispatchQueue.main.async { Player.shared.crossfadeMs = ms }

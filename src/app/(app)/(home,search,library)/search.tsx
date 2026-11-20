@@ -12,7 +12,9 @@ import { player } from "@/player/player";
 import { pickTopArtist } from "@/search/rank";
 import { streamSearch, type SearchState } from "@/search/stream";
 import { searchFocus } from "@/shell/state";
-import { ArtistRow, playSpice } from "@/song/cards";
+import { ArtistRow } from "@/song/cards";
+import { openSongMenu } from "@/song/menu";
+import { openCollectionMenu, runCollection, useIsLoading, type CollectionRef } from "@/song/collections";
 import { SongList } from "@/song/SongList";
 import { PeopleRow } from "@/profile/people";
 import { SpiceArt } from "@/spice/SpiceArt";
@@ -22,7 +24,7 @@ import { EmptyState, PlayButton, Section, Skeleton, SongRowsSkeleton } from "@/u
 import { Icon } from "@/ui/Icon";
 import { Press } from "@/ui/Press";
 import { PageTitle, Screen, TopBar } from "@/ui/Screen";
-import { Text } from "@/ui/Text";
+import { Kicker, Text } from "@/ui/Text";
 import { iosShadow } from "@/ui/shadow";
 import { colors, fonts, radius } from "@/ui/theme";
 import { kv } from "@/lib/storage";
@@ -243,10 +245,12 @@ function SearchSkeleton() {
 }
 
 function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
-  const [loading, setLoading] = useState(false);
+  const collection: CollectionRef = { kind: "spice", id: spice.id, name: spice.name };
+  const loading = useIsLoading(collection);
   return (
     <Press
       onPress={() => router.push(`/spice/${spice.id}`)}
+      onLongPress={() => openCollectionMenu(collection, { subtitle: "Spice", artwork: spice.covers[0] })}
       feedback="tap"
       scaleTo={0.98}
       ripple
@@ -268,9 +272,7 @@ function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
         <SpiceArt name={spice.name} covers={spice.covers} label={false} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text size={11} weight={700} color={colors.text2} style={{ letterSpacing: 2 }}>
-          SPICE
-        </Text>
+        <Kicker>Spice</Kicker>
         <Text size={18} weight={700} numberOfLines={1} style={{ letterSpacing: -0.36 }}>
           {spice.name}
         </Text>
@@ -278,14 +280,7 @@ function SpiceResult({ spice }: { spice: NonNullable<SearchState["spice"]> }) {
           {spice.name} picked for you, different every day
         </Text>
       </View>
-      <PlayButton
-        loading={loading}
-        onPress={async () => {
-          setLoading(true);
-          await playSpice(spice);
-          setLoading(false);
-        }}
-      />
+      <PlayButton loading={loading} onPress={() => void runCollection(collection)} />
     </Press>
   );
 }
@@ -294,18 +289,22 @@ function HeroCard({
   art,
   source,
   round,
+  kicker,
   title,
   meta,
   onPress,
+  onLongPress,
   playing,
   onPlay,
 }: {
   art?: string;
   source?: { uri: string; headers?: Record<string, string> };
   round?: boolean;
+  kicker: string;
   title: string;
-  meta: string;
+  meta?: string;
   onPress: () => void;
+  onLongPress: () => void;
   playing: boolean;
   onPlay: () => void;
 }) {
@@ -314,6 +313,7 @@ function HeroCard({
   return (
     <Press
       onPress={onPress}
+      onLongPress={onLongPress}
       feedback="tap"
       scaleTo={0.98}
       style={{ padding: 20, borderRadius: radius.xl, backgroundColor: theme?.color ?? colors.surface2, gap: 20 }}
@@ -321,13 +321,16 @@ function HeroCard({
       <View style={{ elevation: round ? 10 : 0, shadowColor: "#000", ...iosShadow(round ? 10 : 0), alignSelf: "flex-start", borderRadius: round ? 68 : 16 }}>
         <Artwork url={art} source={source} size={136} round={round} radius={16} fallback={round ? "user" : "music"} />
       </View>
-      <View style={{ paddingRight: 64, gap: 4 }}>
-        <Text size={28} weight={700} color={ink} numberOfLines={2} style={{ letterSpacing: -0.56, lineHeight: 31 }}>
+      <View style={{ paddingRight: 64, gap: 6 }}>
+        <Kicker color={inkMuted}>{kicker}</Kicker>
+        <Text size={28} weight={700} color={ink} numberOfLines={2} style={{ letterSpacing: -0.8, lineHeight: 31 }}>
           {title}
         </Text>
-        <Text color={inkMuted} numberOfLines={1}>
-          {meta}
-        </Text>
+        {meta ? (
+          <Text variant="subhead" color={inkMuted} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
       </View>
       <View style={{ position: "absolute", right: 24, bottom: 24 }}>
         <PlayButton playing={playing} onPress={onPlay} bg={theme ? ink : colors.accent} fg={theme ? theme.color : colors.accentInk} />
@@ -343,9 +346,11 @@ function TopSong({ song }: { song: Song }) {
   return (
     <HeroCard
       art={song.artworkUrl}
+      kicker="Song"
       title={song.title}
-      meta={`Song · ${artistLine(song)}`}
+      meta={artistLine(song)}
       onPress={go}
+      onLongPress={() => openSongMenu(song)}
       playing={current && pb.playing}
       onPlay={go}
     />
@@ -362,9 +367,16 @@ function TopArtist({ artist, results }: { artist: ArtistCard & { cover?: string 
       art={artist.imageUrl ?? artist.cover}
       source={proxied}
       round
+      kicker="Artist"
       title={artist.name}
-      meta="Artist"
+      meta={theirs.length ? `${theirs.length === 1 ? "1 song" : `${theirs.length} songs`} in these results` : undefined}
       onPress={() => router.push(`/artist/${artist.id}`)}
+      onLongPress={() =>
+        openCollectionMenu(
+          { kind: "artist", id: artist.id, name: artist.name },
+          { subtitle: "Artist", artwork: artist.imageUrl ?? artist.cover, round: true },
+        )
+      }
       playing={current && pb.playing}
       onPlay={() => (current ? player.toggle() : player.play(theirs, 0))}
     />

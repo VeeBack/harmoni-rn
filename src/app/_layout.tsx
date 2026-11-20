@@ -4,10 +4,12 @@ import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ReducedMotionConfig, ReduceMotion } from "react-native-reanimated";
 
 import { importDevSession } from "@/auth/devSession";
 import "@/player/player";
 import { restoreQueryCache, queryClient } from "@/state/query";
+import { usePrefs } from "@/settings/prefs";
 import { useSession } from "@/state/session";
 import { OverlayHost } from "@/ui/overlays";
 import { colors } from "@/ui/theme";
@@ -25,6 +27,7 @@ const theme = {
 
 export default function RootLayout() {
   const signedIn = useSession((s) => s.signedIn);
+  const reduceMotion = usePrefs((s) => s.reduceMotion);
   useEffect(() => {
     const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 60);
     importDevSession().then((ok) => ok && useSession.getState().didSignIn());
@@ -34,6 +37,8 @@ export default function RootLayout() {
   }, []);
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Settings › Look & feel › Reduce motion; otherwise Android's own "Remove animations". */}
+      <ReducedMotionConfig mode={reduceMotion ? ReduceMotion.Always : ReduceMotion.System} />
       <QueryClientProvider client={queryClient}>
         <ThemeProvider value={theme}>
           <StatusBar style="light" />

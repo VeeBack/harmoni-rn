@@ -69,9 +69,9 @@ export default function PlaylistScreen() {
       description={p?.description}
       meta={
         p && !owned && p.owner ? (
-          <Text variant="subhead" color={colors.text2}>
+          <Text variant="footnote" color={colors.text2}>
             By{" "}
-            <Text variant="subhead" weight={600} color={colors.tint} onPress={() => router.push(profilePath(p.owner!.username) as never)}>
+            <Text variant="footnote" weight={600} color={colors.text} onPress={() => router.push(profilePath(p.owner!.username) as never)}>
               {p.owner.name}
             </Text>
           </Text>
@@ -79,8 +79,8 @@ export default function PlaylistScreen() {
       }
       actions={
         p && owned ? (
-          <IconButton label="Share" onPress={share} size={40}>
-            <Icon name="share" size={21} color={colors.tint} />
+          <IconButton label="Share" onPress={share} size={42}>
+            <Icon name="share" size={22} color={colors.text2} />
           </IconButton>
         ) : undefined
       }

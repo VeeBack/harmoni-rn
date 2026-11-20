@@ -1,12 +1,10 @@
 name: Android
 
-# Every push to main builds an installable APK (and an unsigned iOS IPA) and publishes
-# them as a GitHub Release tagged v1.0.<run number>. The app finds these and updates itself
-# (Obtainium can follow them too).
-# Pull requests build too (Actions › the run › Artifacts) but don't release.
+# Releases are built locally now (scripts/release.sh: much quicker than a
+# runner) and published as GitHub Releases the app updates itself from.
+# This still builds an APK for pull requests, or when run by hand, as a
+# fallback: Actions › the run › Artifacts. It doesn't publish releases.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -21,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write # to publish releases
+  contents: read
 
 jobs:
   apk:
@@ -36,8 +34,6 @@ jobs:
       EXPO_PUBLIC_UPDATE_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # history and tags, for the release notes
 
       - uses: actions/setup-java@v4
         with:
@@ -120,103 +116,3 @@ jobs:
           name: harmoni-${{ env.APP_VERSION }}
           path: dist/*.apk
           if-no-files-found: error
-
-      - name: Release notes
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        # What changed since the last release, a commit subject a line. The app shows these
-        # as "What's new" when it offers the update.
-        run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
-          notes="$RUNNER_TEMP/notes.md"
-          git log --no-merges --format='- %s' ${prev:+$prev..}HEAD | grep -v '\[skip ci\]' | grep -v '^- CI:' | head -30 > "$notes" || true
-          [ -s "$notes" ] || echo "- Small fixes and improvements" > "$notes"
-          if [ -n "$prev" ]; then
-            printf '\n**Full Changelog**: %s/%s/compare/%s...v%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$prev" "$APP_VERSION" >> "$notes"
-          fi
-          cat "$notes"
-          echo "NOTES_FILE=$notes" >> "$GITHUB_ENV"
-
-      - name: Release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: Harmoni ${{ env.APP_VERSION }}
-          target_commitish: ${{ github.sha }}
-          files: dist/*.apk
-          body_path: ${{ env.NOTES_FILE }}
-          make_latest: true
-
-  # iOS: an unsigned IPA. It installs once a sideloading tool (AltStore, SideStore,
-  # Sideloadly) re-signs it with the person's own Apple ID.
-  ipa:
-    runs-on: macos-26
-    timeout-minutes: 90
-    env:
-      VERSION_CODE: ${{ github.run_number }}
-      APP_VERSION: 1.0.${{ github.run_number }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable # SDK 58 needs Xcode 26.4+
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      - name: Generate the iOS project
-        # Also runs pod install.
-        run: CI=1 bunx expo prebuild --platform ios
-
-      - name: Build
-        run: |
-          workspace=$(ls -d ios/*.xcworkspace | head -1)
-          scheme=$(basename "$workspace" .xcworkspace)
-          echo "Building $scheme"
-          xcodebuild build \
-            -workspace "$workspace" -scheme "$scheme" \
-            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            > build.log 2>&1 || { grep -n "error:" build.log | head -60; tail -120 build.log; exit 1; }
-          tail -5 build.log
-
-      - name: Package the IPA
-        run: |
-          app=$(ls -d build/Build/Products/Release-iphoneos/*.app | head -1)
-          mkdir -p dist/Payload
-          cp -R "$app" dist/Payload/
-          (cd dist && zip -qry "harmoni-${APP_VERSION}.ipa" Payload && rm -rf Payload)
-          ls -la dist
-
-      # Uploaded as the .ipa itself (an IPA is already a zip), so the download is ready to sideload.
-      # Unarchived, the artifact takes the file's name: harmoni-<version>.ipa.
-      - uses: actions/upload-artifact@v7
-        with:
-          path: dist/harmoni-${{ env.APP_VERSION }}.ipa
-          archive: false
-          if-no-files-found: error
-
-  ipa-release:
-    # Adds the IPA to the release the apk job made (same tag).
-    needs: [apk, ipa]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      # v8 leaves an unarchived artifact as it is (v4 would try to unzip it).
-      - uses: actions/download-artifact@v8
-        with:
-          name: harmoni-1.0.${{ github.run_number }}.ipa
-          path: dist
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          files: dist/*.ipa

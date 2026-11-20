@@ -237,6 +237,8 @@ final class Downloads: NSObject, URLSessionDownloadDelegate {
     guard let url = Core.playURL(r.id) else { return }
     var req = URLRequest(url: url)
     req.setValue(Core.userAgent, forHTTPHeaderField: "User-Agent")
+    // Download on Wi-Fi only (the default): no mobile data or hotspots.
+    req.allowsExpensiveNetworkAccess = !Prefs.wifiOnlyDownloads
     if let token = AuthStore.shared.peekToken() { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
     let task = session.downloadTask(with: req)
     task.taskDescription = r.id

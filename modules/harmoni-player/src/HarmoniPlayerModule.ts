@@ -47,6 +47,9 @@ export interface DownloadEvent {
   song?: string | null;
 }
 
+/** The settings kept natively (Prefs.kt), with their defaults there. */
+export type NativePref = "wifiOnlyDownloads" | "skipSilence" | "playAlongside" | "stopOnSwipe" | "mediaHeart";
+
 export interface ArtworkColors {
   color: string;
   deep: string;
@@ -124,6 +127,9 @@ declare class HarmoniPlayerModule extends NativeModule<Events> {
   retry(): Promise<void>;
   pauseAtEndOfSong(on: boolean): Promise<void>;
   setSmooth(on: boolean): void;
+  /** Settings the player or downloads need without the app (Prefs.kt): read, and set (applied at once). */
+  getPref(key: NativePref): boolean;
+  setPref(key: NativePref, on: boolean): void;
   setCrossfade(seconds: number): void;
   /** 0..1: how hard the bass is hitting in what is coming out of the speaker now (0 when paused). */
   bass(): number;
