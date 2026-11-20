@@ -3,7 +3,9 @@ import { create } from "zustand";
 
 import { Api } from "@/api/endpoints";
 import type { Song } from "@/api/types";
+import { download } from "@/downloads/downloads";
 import { kv } from "@/lib/storage";
+import { usePrefs } from "@/settings/prefs";
 import { queryClient } from "./query";
 
 interface LibraryStore {
@@ -50,6 +52,8 @@ export const useLibrary = create<LibraryStore>((set, get) => ({
           get().setLiked(song.id, false);
           get().setLiked(r.songId, true);
         }
+        // Settings › Downloads & data › Download new likes.
+        if (usePrefs.getState().autoDownloadLikes) download([r.songId === song.id ? song : { ...song, id: r.songId }]);
       }
       queryClient.invalidateQueries({ queryKey: ["likes"] });
       queryClient.invalidateQueries({ queryKey: ["home"] });

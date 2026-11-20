@@ -153,7 +153,7 @@ function HomeBody({ data }: { data: HomeData }) {
             title="Get mixes made for you"
             body="Turn on Super Processing and Harmoni learns what you like from how you listen, then fills this page with new finds, old favourites and a mix of its own."
             action="Turn it on in Settings"
-            onAction={() => router.push("/settings")}
+            onAction={() => router.push("/settings/recommendations" as never)}
           />
         </Section>
       ) : null}

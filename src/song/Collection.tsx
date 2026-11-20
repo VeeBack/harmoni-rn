@@ -12,6 +12,7 @@ import type { Song } from "@/api/types";
 import { download, prioritizeDownloads, removeDownloads, useListDownloadState } from "@/downloads/downloads";
 import { matches, plural, sameList, total } from "@/lib/format";
 import { kv } from "@/lib/storage";
+import { usePrefs } from "@/settings/prefs";
 import { useArtworkColors, usePlayback } from "@/player/hooks";
 import { player } from "@/player/player";
 import { TOPBAR, useContentBottom } from "@/shell/layout";
@@ -93,6 +94,8 @@ export function Collection(p: CollectionProps) {
   const insets = useSafeAreaInsets();
   const bottom = useContentBottom();
   const { width } = useWindowDimensions();
+  // Settings › Look & feel › Hide song numbers.
+  const numbered = usePrefs((s) => !s.hideNumbers) && p.numbered;
   const scrollY = useSharedValue(0);
   const target = useRef<ComponentRef<typeof View>>(null);
   const [sort, setSortState] = useState<Sort>(
@@ -283,7 +286,7 @@ export function Collection(p: CollectionProps) {
                 <SongRow
                   song={item}
                   index={index}
-                  numbered={p.numbered}
+                  numbered={numbered}
                   compact={p.compact}
                   onPress={onPress}
                   onMore={onMore}

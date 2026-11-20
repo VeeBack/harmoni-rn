@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
 import { haptic } from "@/lib/haptics";
+import { kv } from "@/lib/storage";
 import { usePlayback, usePlayingOn, useProgress } from "@/player/hooks";
 import { player } from "@/player/player";
 import { Artwork } from "@/ui/Artwork";
@@ -55,6 +56,11 @@ export function Dock({ target }: { target: RefObject<ComponentRef<typeof View> |
   const props = useTabBarProps((s) => s.props);
   const insets = useSafeAreaInsets();
   const { song } = usePlayback();
+  // Where you were, for Settings › Look & feel › Open on › Where you left off.
+  const tabName = props?.state.routes[props.state.index]?.name;
+  useEffect(() => {
+    if (tabName) kv.set("lastTab", tabName);
+  }, [tabName]);
   if (!props) return null;
   const { state, emitter, navigateToTab } = props;
   return (

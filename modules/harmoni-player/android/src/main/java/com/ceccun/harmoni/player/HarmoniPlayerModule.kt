@@ -567,6 +567,19 @@ class HarmoniPlayerModule : Module() {
 
     Function("setSmooth") { on: Boolean -> smooth = on }
 
+    /** A setting the player or downloads need without the app (Prefs), applied straight away. */
+    Function("getPref") { key: String -> Prefs.get(key) }
+    Function("setPref") { key: String, on: Boolean ->
+      Prefs.set(key, on)
+      main.post {
+        when (key) {
+          "wifiOnlyDownloads" -> Downloads.manager.requirements = Downloads.requirementsNow()
+          "skipSilence", "playAlongside" -> PlaybackService.instance?.applyPrefs()
+          "mediaHeart" -> PlaybackService.instance?.refreshButtons()
+        }
+      }
+    }
+
     /** Another device is playing (JSON) or not (null): what the media session shows. */
     AsyncFunction("setRemote") { json: String? ->
       if (json == null) {
