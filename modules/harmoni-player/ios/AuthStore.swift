@@ -50,8 +50,33 @@ final class AuthStore {
 
   /// Serialises loads and refreshes (refreshes block on the network, so never call on main).
   private let lock = NSLock()
-  private var session: Session?
+  private var session: Session? {
+    didSet {
+      peekLock.lock()
+      peeked = session.map { ($0.accessToken, $0.expiresAt) }
+      peekLock.unlock()
+    }
+  }
   private var loaded = false
+
+  /// A copy of the token behind its own lock, so the main thread can read it while a
+  /// refresh holds [lock] on the network.
+  private let peekLock = NSLock()
+  private var peeked: (token: String, expiresAt: Double)?
+
+  /// The current access token without waiting (it may be about to run out). Nil before the
+  /// session has been loaded once.
+  func peekToken() -> String? {
+    peekLock.lock(); defer { peekLock.unlock() }
+    return peeked?.token
+  }
+
+  /// Whether the token runs out within `ms` (true when there's none in memory yet).
+  func expiresWithin(_ ms: Double) -> Bool {
+    peekLock.lock(); defer { peekLock.unlock() }
+    guard let p = peeked else { return true }
+    return p.expiresAt - Self.nowMs() < ms
+  }
 
   /// Called when the server says the sign-in is over.
   var onSignedOut: (() -> Void)?
@@ -85,11 +110,11 @@ final class AuthStore {
     loaded = true
   }
 
-  /// A token good for at least another minute, refreshing if needed. Blocking.
-  func freshToken() -> String? {
+  /// A token good for at least another `minValidMs` (a minute), refreshing if needed. Blocking.
+  func freshToken(minValidMs: Double = 60_000) -> String? {
     lock.lock(); defer { lock.unlock() }
     guard let s = loadedSession() else { return nil }
-    if s.expiresAt - Self.nowMs() > 60_000 { return s.accessToken }
+    if s.expiresAt - Self.nowMs() > minValidMs { return s.accessToken }
     return refreshLocked(s)
   }
 
