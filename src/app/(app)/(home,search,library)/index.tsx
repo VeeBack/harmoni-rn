@@ -7,7 +7,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Api } from "@/api/endpoints";
 import type { ArtistCard, Home as HomeData, Shelf, Song } from "@/api/types";
 import { Hero, HeroPill, HeroSkeletonShape } from "@/home/Hero";
-import { Shortcuts } from "@/home/Shortcuts";
+import { BELOW_HERO, SHORTCUT_GAP, Shortcuts, useShortcutWidth } from "@/home/Shortcuts";
 import { whenPhrase } from "@/lib/day-part";
 import { greeting, plural, sameList } from "@/lib/format";
 import { usePlayback } from "@/player/hooks";
@@ -44,7 +44,7 @@ export default function Home() {
   useNow();
   return (
     <Screen tab="(home)" title="Home" titleAt={64} refreshing={q.isRefetching} onRefresh={() => q.refetch()}>
-      <View style={{ marginTop: 8, marginBottom: 16 }}>
+      <View style={{ marginTop: 8, marginBottom: 20 }}>
         <Kicker color="rgba(244,243,241,0.53)">{today()}</Kicker>
         <Text variant="display" style={{ marginTop: 6 }}>
           {greeting(me?.name)}
@@ -71,12 +71,13 @@ export default function Home() {
 
 function HomeSkeleton() {
   const w = useShelfWidth();
+  const tile = useShortcutWidth();
   return (
     <View>
       <HeroSkeletonShape />
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SHORTCUT_GAP, marginTop: BELOW_HERO }}>
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} width="48.8%" height={56} radius={12} style={{ flexGrow: 1 }} />
+          <Skeleton key={i} width={tile} height={56} radius={12} />
         ))}
       </View>
       <View style={{ marginTop: 40, gap: 14 }}>
