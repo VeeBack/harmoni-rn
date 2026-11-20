@@ -29,7 +29,7 @@ import { Screen } from "@/ui/Screen";
 import { Spinner } from "@/ui/Spinner";
 import { Stepper } from "@/ui/Stepper";
 import { Text } from "@/ui/Text";
-import { colors, radius } from "@/ui/theme";
+import { colors, monospace, radius } from "@/ui/theme";
 import { openUpdateSheet, ProgressBar } from "@/update/UpdateSheet";
 import { checkForUpdate, currentBuild, currentVersion, downloadUpdate, retryUpdate, updatesHere, useUpdate } from "@/update/updater";
 
@@ -533,7 +533,7 @@ function InvitesGroup({ days }: { days: number }) {
       {mine.map((i) => {
         const expired = !!i.expiresAt && Date.parse(i.expiresAt) < Date.now();
         return (
-          <Row key={i.code} title={<Text style={{ fontFamily: "monospace", letterSpacing: 1 }}>{i.code}</Text>} note={status(i)}>
+          <Row key={i.code} title={<Text style={{ fontFamily: monospace, letterSpacing: 1 }}>{i.code}</Text>} note={status(i)}>
             {!i.usedAt && !expired ? (
               <IconButton label="Copy link" size={36} onPress={() => copy(i.code)}>
                 <Icon name="copy" size={19} color={colors.text2} />

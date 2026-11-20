@@ -102,8 +102,16 @@ final class Player: NSObject {
   }
 
   var durationMs: Double? {
-    if let d = av.currentItem?.duration, d.isNumeric, d.seconds > 0 { return d.seconds * 1000 }
-    return current?.durationMs
+    let known = current?.durationMs
+    if let d = av.currentItem?.duration, d.isNumeric, d.seconds > 0 {
+      let ms = d.seconds * 1000
+      // AVFoundation estimates the length of a stream it can't see the end of (no
+      // Content-Length while the server is still fetching the song), and can be far off:
+      // twice the length has been seen. The catalogue's length is right; trust it then.
+      if let known, known > 0, abs(ms - known) > known * 0.1 { return known }
+      return ms
+    }
+    return known
   }
 
   var bufferedMs: Double {
