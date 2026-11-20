@@ -27,7 +27,6 @@ import { registerScrollToTop } from "@/shell/state";
 import { TOPBAR, useContentBottom } from "@/shell/layout";
 import { useSession } from "@/state/session";
 import { Icon } from "./Icon";
-import { Logo } from "./Logo";
 import { Material } from "./Material";
 import { Press } from "./Press";
 import { Text } from "./Text";
@@ -107,8 +106,6 @@ export function TopBar({
               >
                 <Icon name="chevron-left" size={26} color={colors.text} />
               </Press>
-            ) : avatar ? (
-              <Wordmark />
             ) : null)}
         </View>
       )}
@@ -137,18 +134,6 @@ export function TopBar({
           </Press>
         ) : null}
       </View>
-    </View>
-  );
-}
-
-/** Harmoni's bars and name, top left on the tab pages (the web's phone top bar). */
-function Wordmark() {
-  return (
-    <View accessible accessibilityLabel="Harmoni" style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: -4 }}>
-      <Logo size={24} bare />
-      <Text variant="headline" weight={700} style={{ letterSpacing: -0.4 }}>
-        Harmoni
-      </Text>
     </View>
   );
 }

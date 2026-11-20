@@ -21,20 +21,6 @@ export function LikedArt({ size = 72 }: { size?: number }) {
   );
 }
 
-/** Recently Played's cover: the clock on a dark slate. */
-export function RecentArt({ size = 72 }: { size?: number }) {
-  return (
-    <LinearGradient
-      colors={["#3d3c40", "#26262a"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}
-    >
-      <Icon name="history" size={size} color={colors.text} />
-    </LinearGradient>
-  );
-}
-
 /** A playlist's cover from its first four different covers. */
 export function Collage({ urls, px = 400 }: { urls: string[]; px?: number }) {
   return (

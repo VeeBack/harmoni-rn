@@ -7,19 +7,14 @@ import { Api } from "@/api/endpoints";
 import { useDownloads } from "@/downloads/downloads";
 import { plural } from "@/lib/format";
 import { kv } from "@/lib/storage";
-import { profilePath } from "@/lib/share";
-import { Avatar } from "@/profile/Avatar";
-import { DownloadsArt, LikedArt, RecentArt } from "@/song/art";
 import { CardLink, SpiceCardLink, useGridWidth } from "@/song/cards";
 import { openCollectionMenu } from "@/song/collections";
-import { SpiceArt } from "@/spice/SpiceArt";
 import { DAILY_SPICE_HREF, useDailySpice } from "@/spice/daily";
 import { useSpiceDraft } from "@/spice/draft";
 import { libraryChanged, sortCollections, usePlaylists, useSharedPlaylists, useSpices } from "@/state/collections";
-import { useSession } from "@/state/session";
 import { Chip, EmptyState, Skeleton } from "@/ui/bits";
 import { Icon } from "@/ui/Icon";
-import { NavRow, PinnedRow } from "@/ui/NavRow";
+import { NavRow } from "@/ui/NavRow";
 import { openMenu, prompt, toast } from "@/ui/overlays";
 import { Press } from "@/ui/Press";
 import { Screen } from "@/ui/Screen";
@@ -67,7 +62,6 @@ export default function Library() {
   const spices = useSpices();
   const shared = useSharedPlaylists();
   const daily = useDailySpice();
-  const me = useSession((s) => s.me);
   const w = useGridWidth();
   const downloads = useDownloads((s) => Object.values(s.items).filter((d) => d.state === "done").length);
   const [filter, setFilter] = useState<Filter>("all");
@@ -147,42 +141,33 @@ export default function Library() {
       </View>
 
       <View>
-        <PinnedRow
-          art={<LikedArt size={20} />}
+        <NavRow
+          icon="heart"
           label="Liked Songs"
-          detail="Every song you've hearted"
           onPress={() => router.push("/liked")}
           onLongPress={() => openCollectionMenu({ kind: "liked", name: "Liked Songs" })}
         />
-        <PinnedRow
-          art={<RecentArt size={20} />}
+        <NavRow
+          icon="history"
           label="Recently Played"
-          detail="What you've played lately"
           onPress={() => router.push("/recent")}
           onLongPress={() => openCollectionMenu({ kind: "recent", name: "Recently Played" })}
         />
         {daily ? (
-          <PinnedRow
-            art={<SpiceArt name={daily.label} label={false} />}
+          <NavRow
+            icon="spice"
             label={daily.label}
-            detail={`Spice · ${daily.part}, from how you listen`}
+            detail={daily.part}
             onPress={() => router.push(DAILY_SPICE_HREF as never)}
             onLongPress={() => openCollectionMenu({ kind: "spice", id: "daily", name: daily.label }, { subtitle: `Spice · ${daily.part}` })}
           />
         ) : null}
-        <PinnedRow
-          art={<DownloadsArt size={20} />}
+        <NavRow
+          icon="download"
           label="Downloads"
-          detail={downloads ? `${plural(downloads, "song")} on this phone` : "Songs saved for offline"}
+          detail={downloads ? plural(downloads, "song") : undefined}
           onPress={() => router.push("/downloads")}
         />
-        {me?.username ? (
-          <NavRow
-            leading={<Avatar name={me.name} url={me.avatarUrl} accent={me.accent} size={26} />}
-            label="Your profile"
-            onPress={() => router.push(profilePath(me.username) as never)}
-          />
-        ) : null}
         <NavRow icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
       </View>
 
