@@ -367,11 +367,21 @@ final class Player: NSObject {
     onChange?()
   }
 
+  /// Where a song plays from: its downloaded file, else the server.
+  private func source(_ id: String) -> URL? {
+    Downloads.shared.localURL(id) ?? Core.playURL(id)
+  }
+
   private func makeItem(_ e: Entry) -> AVPlayerItem {
-    let url = Core.playURL(e.id) ?? URL(string: "about:blank")!
-    var headers = ["User-Agent": Core.userAgent]
-    if let token = AuthStore.shared.peekToken() { headers["Authorization"] = "Bearer \(token)" }
-    let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+    let asset: AVURLAsset
+    if let file = Downloads.shared.localURL(e.id) {
+      asset = AVURLAsset(url: file)
+    } else {
+      let url = Core.playURL(e.id) ?? URL(string: "about:blank")!
+      var headers = ["User-Agent": Core.userAgent]
+      if let token = AuthStore.shared.peekToken() { headers["Authorization"] = "Bearer \(token)" }
+      asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+    }
     let item = AVPlayerItem(asset: asset)
     item.preferredForwardBufferDuration = 0 // let AVFoundation decide
     let status = item.observe(\.status, options: [.new]) { [weak self, weak item] _, _ in
@@ -401,7 +411,7 @@ final class Player: NSObject {
     let want: Int? = (repeatMode == "one" || pauseAtEnd) ? nil : followingIndex()
     let wantId = want.map { queue[$0].id }
     if let item = nextItem, nextIndex == want, wantId != nil, av.items().contains(item),
-       (item.asset as? AVURLAsset)?.url == Core.playURL(wantId!) {
+       (item.asset as? AVURLAsset)?.url == source(wantId!) {
       updateActionAtEnd()
       return
     }
@@ -708,7 +718,7 @@ final class Player: NSObject {
     }
     if !t.warmed && pos >= 10_000, let n = followingIndex() {
       t.warmed = true
-      Core.warm(queue[n].id)
+      if Downloads.shared.localURL(queue[n].id) == nil { Core.warm(queue[n].id) }
     }
   }
 
@@ -718,14 +728,14 @@ final class Player: NSObject {
     let state: [String: Any] = [
       "index": index,
       "count": queue.count,
-      "songId": current?.id ?? NSNull(),
+      "songId": current.map { $0.id as Any } ?? NSNull(),
       "playing": isPlaying,
       "playWhenReady": playWhenReady,
       "buffering": playWhenReady && av.timeControlStatus == .waitingToPlayAtSpecifiedRate,
       "ended": ended,
       "idle": current == nil || failed,
       "positionMs": positionMs,
-      "durationMs": durationMs ?? NSNull(),
+      "durationMs": durationMs.map { $0 as Any } ?? NSNull(),
       "repeat": repeatMode,
       "volume": Double(targetVolume),
     ]
@@ -744,6 +754,9 @@ final class Player: NSObject {
       body["playing"] = isPlaying
       body["index"] = index
     }
+    // Progress for the songs downloading now (the rest of the line comes as onDownload events).
+    let active = Downloads.shared.active().filter { ($0["state"] as? String) == "downloading" }
+    if !active.isEmpty { body["downloads"] = active }
     emit?("onTick", body)
   }
 

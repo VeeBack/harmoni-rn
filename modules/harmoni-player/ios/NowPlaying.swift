@@ -165,7 +165,7 @@ final class Heartbeat {
   /// Main thread.
   func reschedule() {
     timer?.invalidate()
-    let interval: TimeInterval = Player.shared.isPlaying ? 0.5 : (foreground ? 1 : 5)
+    let interval: TimeInterval = Player.shared.isPlaying ? 0.5 : ((foreground || Downloads.shared.isDownloading) ? 1 : 5)
     timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
       self?.fire()
     }

@@ -7,8 +7,8 @@ import Network
 /// Real so far: the session (AuthStore), playback (Player: the queue, gapless, repeat, the
 /// sleep timer's pause at the end of a song, listen reports), the lock screen and remote
 /// controls (NowPlaying), and the tick JS's timers run on (Heartbeat).
-/// Still stubs: crossfade, the bass meter, Harmoni Link in the system controls, downloads and
-/// artwork colours. Android-only things (the self-updater, link settings, equalizer, widget
+/// Downloads too (Downloads: a background URLSession, files played from disk).
+/// Still stubs: crossfade, the bass meter, Harmoni Link in the system controls and artwork colours. Android-only things (the self-updater, link settings, equalizer, widget
 /// pinning) answer "not here" for good.
 public final class HarmoniPlayerModule: Module {
   private let pathMonitor = NWPathMonitor()
@@ -40,6 +40,8 @@ public final class HarmoniPlayerModule: Module {
           self?.sendEvent("onRemoteLike", ["songId": id, "liked": liked])
         }
         Heartbeat.shared.onTick = { Player.shared.emitTick() }
+        Downloads.shared.emit = { body in self?.sendEvent("onDownload", body) }
+        Downloads.shared.start()
         AudioSession.configure()
         NowPlaying.shared.start()
         Heartbeat.shared.reschedule()
@@ -52,6 +54,7 @@ public final class HarmoniPlayerModule: Module {
       DispatchQueue.main.async {
         Player.shared.emit = nil
         Heartbeat.shared.onTick = nil
+        Downloads.shared.emit = nil
         Core.onLikedChanged = nil
       }
     }
@@ -83,6 +86,7 @@ public final class HarmoniPlayerModule: Module {
       Player.shared.stop()
       QueueStore.clear()
       Core.setLiked([])
+      Downloads.shared.removeAll()
       DispatchQueue.global(qos: .userInitiated).async {
         AuthStore.shared.revoke()
         promise.resolve(nil)
@@ -169,15 +173,17 @@ public final class HarmoniPlayerModule: Module {
       DispatchQueue.main.async { NowPlaying.shared.update() }
     }
 
-    // --- downloads (not yet on iOS) ---
+    // --- downloads ---
 
-    AsyncFunction("download") { (_: String) in }
-    AsyncFunction("prioritizeDownloads") { (_: String) in }
-    AsyncFunction("removeDownload") { (_: String) in }
-    AsyncFunction("removeDownloads") { (_: String) in }
-    AsyncFunction("removeAllDownloads") {}
-    AsyncFunction("getDownloads") { () -> String in "[]" }
-    AsyncFunction("getDownloadSize") { () -> Double in 0 }
+    AsyncFunction("download") { (json: String) in Downloads.shared.add(json) }.runOnQueue(.main)
+    AsyncFunction("prioritizeDownloads") { (json: String) in Downloads.shared.prioritize(json) }.runOnQueue(.main)
+    AsyncFunction("removeDownload") { (id: String) in Downloads.shared.remove([id]) }.runOnQueue(.main)
+    AsyncFunction("removeDownloads") { (json: String) in
+      Downloads.shared.remove(((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String]) ?? [])
+    }.runOnQueue(.main)
+    AsyncFunction("removeAllDownloads") { Downloads.shared.removeAll() }.runOnQueue(.main)
+    AsyncFunction("getDownloads") { () -> String in Downloads.shared.allJson() }.runOnQueue(.main)
+    AsyncFunction("getDownloadSize") { () -> Double in Downloads.shared.size() }.runOnQueue(.main)
 
     AsyncFunction("getArtworkColors") { (_: String) -> [String: Any]? in nil }
 

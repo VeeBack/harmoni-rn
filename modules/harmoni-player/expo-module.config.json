@@ -4,6 +4,7 @@
     "modules": ["com.ceccun.harmoni.player.HarmoniPlayerModule"]
   },
   "apple": {
-    "modules": ["HarmoniPlayerModule"]
+    "modules": ["HarmoniPlayerModule"],
+    "appDelegateSubscribers": ["HarmoniAppDelegate"]
   }
 }
