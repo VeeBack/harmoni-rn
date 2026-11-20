@@ -7,7 +7,6 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Api } from "@/api/endpoints";
 import type { ArtistCard, Home as HomeData, Shelf, Song } from "@/api/types";
 import { Hero, HeroPill, HeroSkeletonShape } from "@/home/Hero";
-import { BELOW_HERO, SHORTCUT_GAP, Shortcuts, useShortcutWidth } from "@/home/Shortcuts";
 import { whenPhrase } from "@/lib/day-part";
 import { greeting, plural, sameList } from "@/lib/format";
 import { usePlayback } from "@/player/hooks";
@@ -35,8 +34,9 @@ function useNow() {
   return now;
 }
 
-// Home, top to bottom (the web's): who it's for and when; the one thing to
-// play now, then the places you go most; then shelves, most personal first.
+// Home, top to bottom: who it's for and when; the one thing to play now;
+// then shelves, most personal first. (The web puts shortcut tiles under the
+// hero; here it goes straight to the shelves.)
 export default function Home() {
   const me = useSession((s) => s.me);
   const q = useQuery({ queryKey: ["home"], queryFn: Api.home });
@@ -71,15 +71,9 @@ export default function Home() {
 
 function HomeSkeleton() {
   const w = useShelfWidth();
-  const tile = useShortcutWidth();
   return (
     <View>
       <HeroSkeletonShape />
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SHORTCUT_GAP, marginTop: BELOW_HERO }}>
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} width={tile} height={56} radius={12} />
-        ))}
-      </View>
       <View style={{ marginTop: 40, gap: 14 }}>
         <Skeleton width={180} height={24} />
         <View style={{ flexDirection: "row", gap: 14 }}>
@@ -100,7 +94,6 @@ function HomeBody({ data }: { data: HomeData }) {
   return (
     <View>
       {data.shelves && !fresh ? <SpiceHero recent={data.recent} /> : fresh ? <WelcomeHero /> : <ResumeHero recent={data.recent} />}
-      <Shortcuts />
 
       {data.recent.length ? (
         <Section title="Jump back in" subtitle="What you've been playing lately" onLink={() => router.push("/recent")}>

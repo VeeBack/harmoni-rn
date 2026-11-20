@@ -28,7 +28,7 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 | `src/now-playing/` | The full-screen player: backdrop, lyrics, queue, transport. |
 | `src/profile/` | Profiles (banners drawn with Skia from the person's colour, their fonts, editing in place), people, following and the playlist share sheet. |
 | `src/update/` | Updating from GitHub Releases: the check, the Software Update sheet, and the Updates rows in Settings. |
-| `src/home/` | Home's hero (your Spice, coloured from its covers, with a fan of them) and shortcut tiles. |
+| `src/home/` | Home's hero: your Spice, coloured from its covers, with a fan of them. |
 | `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, tiles, menus (`collections.ts` plays or opens any collection), collection screens, Spice art, and the design system (`theme.ts` shares the web's tokens). |
 | `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `BassMeter`, `Downloads`, `Updater`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
 
