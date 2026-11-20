@@ -67,22 +67,49 @@ final class NowPlaying {
     started = true
     let c = MPRemoteCommandCenter.shared()
     let p = Player.shared
-    c.playCommand.addTarget { _ in p.play(); return .success }
-    c.pauseCommand.addTarget { _ in p.pause(); return .success }
-    c.togglePlayPauseCommand.addTarget { _ in
-      if p.playWhenReady { p.pause() } else { p.play() }
+    // While another device plays (Harmoni Link), the buttons become Link commands for JS.
+    c.playCommand.addTarget { [weak self] _ in
+      if let self, self.remote != nil { self.remoteToggle(to: true) } else { p.play() }
       return .success
     }
-    c.nextTrackCommand.addTarget { _ in p.next(); return .success }
-    c.previousTrackCommand.addTarget { _ in p.prev(restartAfterMs: 3000); return .success }
-    c.changePlaybackPositionCommand.addTarget { e in
+    c.pauseCommand.addTarget { [weak self] _ in
+      if let self, self.remote != nil { self.remoteToggle(to: false) } else { p.pause() }
+      return .success
+    }
+    c.togglePlayPauseCommand.addTarget { [weak self] _ in
+      if let self, let r = self.remote {
+        self.remoteToggle(to: !r.playing)
+      } else if p.playWhenReady {
+        p.pause()
+      } else {
+        p.play()
+      }
+      return .success
+    }
+    c.nextTrackCommand.addTarget { [weak self] _ in
+      if let self, self.remote != nil { self.send(["type": "next"]) } else { p.next() }
+      return .success
+    }
+    c.previousTrackCommand.addTarget { [weak self] _ in
+      if let self, self.remote != nil { self.send(["type": "prev"]) } else { p.prev(restartAfterMs: 3000) }
+      return .success
+    }
+    c.changePlaybackPositionCommand.addTarget { [weak self] e in
       guard let e = e as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-      p.seek(to: e.positionTime * 1000)
+      let ms = max(0, e.positionTime * 1000)
+      if let self, self.remote != nil {
+        self.remote?.positionMs = ms
+        self.remote?.at = CACurrentMediaTime()
+        self.send(["type": "seek", "positionMs": ms])
+        self.update()
+      } else {
+        p.seek(to: ms)
+      }
       return .success
     }
     c.likeCommand.localizedTitle = "Like"
-    c.likeCommand.addTarget { _ in
-      guard let id = p.current?.id else { return .noActionableNowPlayingItem }
+    c.likeCommand.addTarget { [weak self] _ in
+      guard let id = self?.shown?.id else { return .noActionableNowPlayingItem }
       Core.toggleLikeRemotely(id)
       return .success
     }
@@ -93,32 +120,124 @@ final class NowPlaying {
     update()
   }
 
-  /// Shows the current song and where it is. Main thread; cheap enough to call on every change.
+  // MARK: - Harmoni Link: another device playing
+
+  /// What another device on the account is playing (RemotePlayer.kt's state).
+  struct Remote {
+    var deviceId: String
+    var deviceName: String
+    var queue: [Entry]
+    var index: Int
+    var playing: Bool
+    var positionMs: Double
+    var durationMs: Double
+    /// When positionMs was true (it runs on while playing).
+    var at: CFTimeInterval
+
+    var current: Entry? { queue.indices.contains(index) ? queue[index] : nil }
+    var positionNow: Double { playing ? positionMs + (CACurrentMediaTime() - at) * 1000 : positionMs }
+  }
+
+  private(set) var remote: Remote?
+  /// Link commands for JS (onRemoteCommand).
+  var onRemoteCommand: (([String: Any?]) -> Void)?
+
+  /// The song the lock screen shows: the other device's, or this phone's.
+  var shown: Entry? { remote?.current ?? Player.shared.current }
+
+  /// Another device is playing (JSON from src/player/remoteSession.ts), or not (nil). Main thread.
+  func setRemote(_ json: String?) {
+    guard let json, let o = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else {
+      if remote != nil {
+        remote = nil
+        update()
+      }
+      return
+    }
+    // The queue only comes when it changed; otherwise keep the last one.
+    let queue: [Entry]
+    if let q = o["queue"] as? [Any] {
+      queue = q.compactMap { ($0 as? [String: Any]).flatMap(Entry.init) }
+    } else {
+      queue = remote?.queue ?? []
+    }
+    let num = { (k: String) in (o[k] as? NSNumber)?.doubleValue ?? 0 }
+    let wasRemote = remote != nil
+    remote = Remote(
+      deviceId: (o["deviceId"] as? String) ?? "",
+      deviceName: (o["deviceName"] as? String) ?? "another device",
+      queue: queue,
+      index: min(max(0, Int(num("index"))), max(0, queue.count - 1)),
+      playing: (o["playing"] as? Bool) ?? false,
+      positionMs: max(0, num("positionMs")),
+      durationMs: num("durationMs"),
+      at: CACurrentMediaTime()
+    )
+    // As on Android: this phone stops playing while the other device has the music.
+    if !wasRemote && Player.shared.playWhenReady { Player.shared.pause() }
+    update()
+  }
+
+  /// Optimistic: show it straight away; the next Link state confirms or corrects it.
+  private func remoteToggle(to playing: Bool) {
+    guard var r = remote, r.playing != playing else { return }
+    r.positionMs = r.positionNow
+    r.at = CACurrentMediaTime()
+    r.playing = playing
+    remote = r
+    send(["type": "toggle"])
+    update()
+  }
+
+  private func send(_ command: [String: Any?]) {
+    onRemoteCommand?(command)
+  }
+
+  /// Shows the current song (this phone's or the other device's) and where it is. Main thread;
+  /// cheap enough to call on every change.
   func update() {
     let p = Player.shared
     let center = MPNowPlayingInfoCenter.default()
     let c = MPRemoteCommandCenter.shared()
-    guard let e = p.current else {
+    guard let e = shown else {
       center.nowPlayingInfo = nil
       center.playbackState = .stopped
       return
     }
+    let playing: Bool
+    let positionMs: Double
+    let durationMs: Double?
+    let artist: String
+    if let r = remote {
+      playing = r.playing
+      positionMs = r.positionNow
+      durationMs = r.durationMs > 0 ? r.durationMs : e.durationMs
+      artist = e.artist.isEmpty ? "On \(r.deviceName)" : "\(e.artist) · on \(r.deviceName)"
+      c.nextTrackCommand.isEnabled = true
+    } else {
+      playing = p.isPlaying
+      positionMs = p.positionMs
+      durationMs = p.durationMs
+      artist = e.artist
+      c.nextTrackCommand.isEnabled = p.hasNext || p.queue.count > 1
+    }
     var info: [String: Any] = [
       MPMediaItemPropertyTitle: e.title,
-      MPMediaItemPropertyArtist: e.artist,
-      MPNowPlayingInfoPropertyElapsedPlaybackTime: p.positionMs / 1000,
-      MPNowPlayingInfoPropertyPlaybackRate: p.isPlaying ? 1.0 : 0.0,
+      MPMediaItemPropertyArtist: artist,
+      MPNowPlayingInfoPropertyElapsedPlaybackTime: positionMs / 1000,
+      MPNowPlayingInfoPropertyPlaybackRate: playing ? 1.0 : 0.0,
       MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
       MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
-      MPNowPlayingInfoPropertyPlaybackQueueIndex: max(0, p.index),
-      MPNowPlayingInfoPropertyPlaybackQueueCount: p.queue.count,
     ]
+    if remote == nil {
+      info[MPNowPlayingInfoPropertyPlaybackQueueIndex] = max(0, p.index)
+      info[MPNowPlayingInfoPropertyPlaybackQueueCount] = p.queue.count
+    }
     if let album = e.album { info[MPMediaItemPropertyAlbumTitle] = album }
-    if let d = p.durationMs { info[MPMediaItemPropertyPlaybackDuration] = d / 1000 }
+    if let d = durationMs { info[MPMediaItemPropertyPlaybackDuration] = d / 1000 }
     if e.artworkUrl == artworkUrl, let artwork { info[MPMediaItemPropertyArtwork] = artwork }
     center.nowPlayingInfo = info
-    center.playbackState = p.isPlaying ? .playing : .paused
-    c.nextTrackCommand.isEnabled = p.hasNext || p.queue.count > 1
+    center.playbackState = playing ? .playing : .paused
     c.likeCommand.isActive = Core.isLiked(e.id)
     if e.artworkUrl != artworkUrl { loadArtwork(e.artworkUrl) }
   }

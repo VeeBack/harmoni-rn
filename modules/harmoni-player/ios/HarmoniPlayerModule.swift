@@ -4,12 +4,15 @@ import Network
 /// The iOS side of modules/harmoni-player. Same name, functions and events as the Android
 /// module (HarmoniPlayerModule.kt), so JS runs unchanged.
 ///
-/// Real so far: the session (AuthStore), playback (Player: the queue, gapless, repeat, the
-/// sleep timer's pause at the end of a song, listen reports), the lock screen and remote
-/// controls (NowPlaying), and the tick JS's timers run on (Heartbeat).
-/// Downloads too (Downloads: a background URLSession, files played from disk).
-/// Still stubs: crossfade, the bass meter, Harmoni Link in the system controls and artwork colours. Android-only things (the self-updater, link settings, equalizer, widget
-/// pinning) answer "not here" for good.
+/// - AuthStore: the session (Keychain, refresh).
+/// - Player: the queue, gapless, repeat, crossfade, the sleep timer's pause at the end of a
+///   song, listen reports, and the bass meter (BassMeter, an audio tap).
+/// - NowPlaying: the lock screen and remote controls, including Harmoni Link (another device's
+///   song, controlled from here); also the audio session and the tick JS's timers run on.
+/// - Downloads: a background URLSession, files played from disk.
+/// - Artwork: colours from covers.
+/// Android-only things (the self-updater, link settings, equalizer, widget pinning, the output
+/// switcher) answer "not here" for good.
 public final class HarmoniPlayerModule: Module {
   private let pathMonitor = NWPathMonitor()
   private var expensive = false
@@ -41,6 +44,7 @@ public final class HarmoniPlayerModule: Module {
         }
         Heartbeat.shared.onTick = { Player.shared.emitTick() }
         Downloads.shared.emit = { body in self?.sendEvent("onDownload", body) }
+        NowPlaying.shared.onRemoteCommand = { body in self?.sendEvent("onRemoteCommand", body) }
         Downloads.shared.start()
         AudioSession.configure()
         NowPlaying.shared.start()
@@ -150,14 +154,24 @@ public final class HarmoniPlayerModule: Module {
       DispatchQueue.main.async { Player.shared.smooth = on }
     }
 
-    // Not yet on iOS: crossfade and the bass meter.
-    Function("setCrossfade") { (_: Double) in }
-    Function("bass") { () -> Double in 0 }
-    Function("bassWindow") { (n: Int) -> [Double] in Array(repeating: 0, count: min(max(1, n), 120)) }
+    Function("setCrossfade") { (seconds: Double) in
+      let ms = min(max(0, seconds), 12) * 1000
+      DispatchQueue.main.async { Player.shared.crossfadeMs = ms }
+    }
 
-    // --- Harmoni Link in the system controls (not yet on iOS) ---
+    // 0..1, how hard the bass is hitting in what's coming out of the speaker now.
+    Function("bass") { () -> Double in max(0, Player.shared.bassWindow(1)[0]) }
 
-    AsyncFunction("setRemote") { (_: String?) in }
+    // The next `n` frames of bass (1/60 s apart) from now, for the UI thread to play out.
+    Function("bassWindow") { (n: Int) -> [Double] in Player.shared.bassWindow(n) }
+
+    // --- Harmoni Link in the system controls ---
+
+    /// Another device is playing (JSON) or not (null): what the lock screen shows and controls.
+    AsyncFunction("setRemote") { (json: String?) in NowPlaying.shared.setRemote(json) }.runOnQueue(.main)
+
+    // Android lists Link devices in its output switcher; iOS has no way for an app to add
+    // devices to the AirPlay picker, so there's nothing to do with them here.
     Function("setLinkDevices") { (_: String, _: String?, _: Double) in }
 
     // --- likes (the lock screen's heart) ---
@@ -185,7 +199,11 @@ public final class HarmoniPlayerModule: Module {
     AsyncFunction("getDownloads") { () -> String in Downloads.shared.allJson() }.runOnQueue(.main)
     AsyncFunction("getDownloadSize") { () -> Double in Downloads.shared.size() }.runOnQueue(.main)
 
-    AsyncFunction("getArtworkColors") { (_: String) -> [String: Any]? in nil }
+    AsyncFunction("getArtworkColors") { (url: String, promise: Promise) in
+      DispatchQueue.global(qos: .userInitiated).async {
+        promise.resolve(Artwork.colors(url))
+      }
+    }
 
     // --- Android-only: never on iOS ---
 

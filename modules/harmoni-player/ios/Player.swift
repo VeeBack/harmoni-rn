@@ -83,6 +83,9 @@ final class Player: NSObject {
         guard let self, self.isPlaying else { return }
         self.save()
       }
+      Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        self?.checkCrossfade()
+      }
     }
   }
 
@@ -216,6 +219,7 @@ final class Player: NSObject {
   }
 
   func pause() {
+    endCrossfade(cancelled: true)
     playWhenReady = false
     if smooth && isPlaying {
       fadeTo(0, ms: 180) { [weak self] in
@@ -234,6 +238,7 @@ final class Player: NSObject {
 
   func seek(to ms: Double) {
     guard current != nil else { return }
+    endCrossfade(cancelled: true)
     let to = max(0, ms)
     if let t = track {
       let from = positionMs
@@ -285,11 +290,13 @@ final class Player: NSObject {
   func setVolume(_ v: Double) {
     fade?.invalidate()
     targetVolume = Float(min(max(0, v), 1))
+    if fader != nil { fadeBase = targetVolume; return emitState() }
     av.volume = targetVolume
     emitState()
   }
 
   func stop() {
+    endCrossfade(cancelled: true)
     if let t = track {
       finishTrack(t, reason: "close", positionMs: positionMs)
       track = nil
@@ -329,6 +336,7 @@ final class Player: NSObject {
     let prev = track
     let prevIndex = index
     skipAfterError?.cancel()
+    endCrossfade(cancelled: true)
     fade?.invalidate()
     av.volume = targetVolume
 
@@ -372,7 +380,37 @@ final class Player: NSObject {
     Downloads.shared.localURL(id) ?? Core.playURL(id)
   }
 
+  /// An item for `e` in the queue: watched, with a bass meter.
   private func makeItem(_ e: Entry) -> AVPlayerItem {
+    let item = bareItem(e)
+    item.preferredForwardBufferDuration = 0 // let AVFoundation decide
+    let status = item.observe(\.status, options: [.new]) { [weak self, weak item] _, _ in
+      DispatchQueue.main.async {
+        guard let self, let item else { return }
+        self.itemStatusChanged(item)
+      }
+    }
+    observations[ObjectIdentifier(item)] = [status]
+    let key = ObjectIdentifier(item)
+    BassMeter.attach(to: item) { [weak self] meter in
+      guard let self, self.observations[key] != nil else { return } // gone already
+      self.meterLock.lock()
+      self.meters[key] = meter
+      self.meterLock.unlock()
+    }
+    return item
+  }
+
+  /// Stops watching an item that's leaving AVQueuePlayer.
+  private func forget(_ item: AVPlayerItem) {
+    let key = ObjectIdentifier(item)
+    observations.removeValue(forKey: key)?.forEach { $0.invalidate() }
+    meterLock.lock()
+    meters.removeValue(forKey: key)
+    meterLock.unlock()
+  }
+
+  private func bareItem(_ e: Entry) -> AVPlayerItem {
     let asset: AVURLAsset
     if let file = Downloads.shared.localURL(e.id) {
       asset = AVURLAsset(url: file)
@@ -382,21 +420,33 @@ final class Player: NSObject {
       if let token = AuthStore.shared.peekToken() { headers["Authorization"] = "Bearer \(token)" }
       asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
     }
-    let item = AVPlayerItem(asset: asset)
-    item.preferredForwardBufferDuration = 0 // let AVFoundation decide
-    let status = item.observe(\.status, options: [.new]) { [weak self, weak item] _, _ in
-      DispatchQueue.main.async {
-        guard let self, let item else { return }
-        self.itemStatusChanged(item)
-      }
-    }
-    observations[ObjectIdentifier(item)] = [status]
-    return item
+    return AVPlayerItem(asset: asset)
   }
 
   private func forgetObservations() {
     observations.values.flatMap { $0 }.forEach { $0.invalidate() }
     observations.removeAll()
+    meterLock.lock()
+    meters.removeAll()
+    meterLock.unlock()
+  }
+
+  // MARK: - the bass meter
+
+  private let meterLock = NSLock()
+  private var meters: [ObjectIdentifier: BassMeter] = [:]
+
+  /// The next `n` frames of bass (1/60 s apart) from now: all 0 when not playing. Any thread.
+  func bassWindow(_ n: Int) -> [Double] {
+    let n = min(max(1, n), 120)
+    let zeros = [Double](repeating: 0, count: n)
+    guard av.timeControlStatus == .playing, let item = av.currentItem else { return zeros }
+    meterLock.lock()
+    let meter = meters[ObjectIdentifier(item)]
+    meterLock.unlock()
+    let now = av.currentTime()
+    guard let meter, now.isNumeric else { return zeros }
+    return meter.window(from: now.seconds, n: n, step: 1.0 / 60)
   }
 
   /// The song after the current one, or nil. Repeat all goes round; repeat one is handled at the end.
@@ -418,7 +468,7 @@ final class Player: NSObject {
     // Drop whatever is queued after the current item.
     for item in av.items().dropFirst() {
       av.remove(item)
-      observations.removeValue(forKey: ObjectIdentifier(item))?.forEach { $0.invalidate() }
+      forget(item)
     }
     nextItem = nil
     nextIndex = -1
@@ -468,7 +518,7 @@ final class Player: NSObject {
 
   private func currentItemChanged(from old: AVPlayerItem?, to new: AVPlayerItem?) {
     guard !rebuilding else { return }
-    if let old { observations.removeValue(forKey: ObjectIdentifier(old))?.forEach { $0.invalidate() } }
+    if let old { forget(old) }
     // AVQueuePlayer moved on to the song we had waiting: a natural transition.
     guard let new, new === nextItem else { return }
     let prev = track
@@ -627,6 +677,112 @@ final class Player: NSObject {
     emitState()
   }
 
+  // MARK: - crossfade (the web's mixer.ts, as PlaybackService.kt does it)
+  //
+  // A few seconds before a song ends, a second player starts the same song, muted, at the
+  // same spot. When the fade begins, AVQueuePlayer moves on to the next song (already loaded)
+  // and the second player carries the end of the old one: it fades out with cos while the
+  // next song fades in with sin, on an equal-power curve.
+
+  /// Crossfade length in ms (0 = off), from Settings.
+  var crossfadeMs: Double = 0 {
+    didSet { if crossfadeMs <= 0 { endCrossfade(cancelled: true) } }
+  }
+  private var fader: AVPlayer?
+  private var faderTimer: Timer?
+  private var fadeStart: CFTimeInterval = 0
+  private var fadeOutMs: Double = 1
+  private var fadeBase: Float = 1
+  private var crossfadedKey: String?
+  /// The ending song, readied in a second player ahead of the fade.
+  private var prepared: (key: String, player: AVPlayer, started: Bool)?
+
+  /// Every 250 ms: get ready for a crossfade, or start one.
+  private func checkCrossfade() {
+    guard fader == nil else { return }
+    let cf = crossfadeMs
+    guard cf > 0, isPlaying, let e = current, let dur = durationMs, dur > 3 * cf,
+          repeatMode != "one", !pauseAtEnd, nextItem != nil else {
+      dropPrepared()
+      return
+    }
+    let key = "\(index):\(e.id)"
+    let left = dur - positionMs
+    guard key != crossfadedKey, left <= cf + 3000 else { return }
+
+    guard let prep = prepared, prep.key == key else {
+      dropPrepared()
+      let p = AVPlayer(playerItem: bareItem(e))
+      p.volume = 0
+      p.automaticallyWaitsToMinimizeStalling = false
+      prepared = (key, p, false)
+      return
+    }
+    if !prep.started {
+      guard prep.player.currentItem?.status == .readyToPlay else { return }
+      prepared?.started = true
+      let at = CMTime(value: Int64(positionMs), timescale: 1000)
+      prep.player.seek(to: at, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] done in
+        DispatchQueue.main.async {
+          guard done, self?.prepared?.player === prep.player else { return }
+          prep.player.play() // muted, keeping pace with the main player until the fade
+        }
+      }
+      return
+    }
+    guard left <= cf, prep.player.timeControlStatus == .playing else { return }
+
+    // Fade: the second player takes the old song, AVQueuePlayer goes on to the next.
+    crossfadedKey = key
+    prepared = nil
+    fade?.invalidate()
+    fadeBase = targetVolume
+    fader = prep.player
+    prep.player.volume = fadeBase
+    fadeStart = CACurrentMediaTime()
+    fadeOutMs = max(1, left)
+    av.volume = 0
+    av.advanceToNextItem()
+    faderTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
+      self?.stepCrossfade()
+    }
+  }
+
+  private func stepCrossfade() {
+    guard let out = fader else {
+      faderTimer?.invalidate()
+      faderTimer = nil
+      return
+    }
+    let t = (CACurrentMediaTime() - fadeStart) * 1000
+    let xo = Float(min(1, max(0, t / fadeOutMs)))
+    let xi = Float(min(1, max(0, t / max(1, crossfadeMs))))
+    out.volume = fadeBase * cos(xo * .pi / 2)
+    av.volume = fadeBase * sin(xi * .pi / 2)
+    if xo >= 1 && xi >= 1 { endCrossfade(cancelled: false) }
+  }
+
+  /// Ends a crossfade. Cancelled (pause, skip, seek): the old song stops now and the new one is
+  /// at full volume.
+  private func endCrossfade(cancelled: Bool) {
+    dropPrepared()
+    guard let out = fader else { return }
+    fader = nil
+    faderTimer?.invalidate()
+    faderTimer = nil
+    out.pause()
+    out.replaceCurrentItem(with: nil)
+    av.volume = fadeBase
+    if cancelled { crossfadedKey = nil }
+  }
+
+  private func dropPrepared() {
+    guard let p = prepared else { return }
+    prepared = nil
+    p.player.pause()
+    p.player.replaceCurrentItem(with: nil)
+  }
+
   // MARK: - smooth volume
 
   private func fadeTo(_ to: Float, ms: Double, then: (() -> Void)? = nil) {
@@ -769,6 +925,7 @@ final class Player: NSObject {
 
   /// Pauses without the smooth fade (an interruption already silenced us).
   func pauseNow() {
+    endCrossfade(cancelled: true)
     playWhenReady = false
     fade?.invalidate()
     av.pause()
