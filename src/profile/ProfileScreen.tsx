@@ -22,7 +22,7 @@ import { openMenu, toast } from "@/ui/overlays";
 import { IconButton, Press } from "@/ui/Press";
 import { Screen } from "@/ui/Screen";
 import { Text } from "@/ui/Text";
-import { colors, fonts } from "@/ui/theme";
+import { colors, font as fontName, fonts } from "@/ui/theme";
 import { Avatar } from "./Avatar";
 import { Banner } from "./Banner";
 import { FollowButton, FollowsYou } from "./people";
@@ -216,7 +216,7 @@ function Body({
   const editing = !!draft;
   const look = draft ?? draftOf(profile);
   const font = fontFor(look.font);
-  const family = font.family;
+  const family = font.family ? fontName(font.family) : undefined;
   const bannerH = insets.top + TOPBAR + 150;
   const path = profilePath(profile.user.username);
   const grid = useGridWidth();
@@ -258,7 +258,7 @@ function Body({
   return (
     <View>
       <View>
-        <Banner kind={look.banner} accent={look.accent} url={profile.bannerUrl} width={width} height={bannerH} />
+        <Banner kind={look.banner} accent={look.accent} url={profile.bannerUrl} width={width} height={bannerH} artists={profile.topArtists} />
         {editing ? (
           <Animated.View entering={FadeIn} exiting={FadeOut} style={{ position: "absolute", right: 16, top: insets.top + TOPBAR + 8 }}>
             <PictureButton
@@ -384,7 +384,13 @@ function Body({
 
       <View style={{ paddingHorizontal: 20 }}>
         {editing ? (
-          <StylePanel look={look} onChange={setDraft} bannerUrl={profile.bannerUrl} onUploadBanner={() => onPicture("banner")} />
+          <StylePanel
+            look={look}
+            onChange={setDraft}
+            bannerUrl={profile.bannerUrl}
+            artists={profile.topArtists}
+            onUploadBanner={() => onPicture("banner")}
+          />
         ) : null}
 
         <Animated.View layout={LinearTransition.springify().damping(22)}>
@@ -509,11 +515,13 @@ function StylePanel({
   look,
   onChange,
   bannerUrl,
+  artists,
   onUploadBanner,
 }: {
   look: Draft;
   onChange: (d: Draft) => void;
   bannerUrl?: string;
+  artists?: Profile["topArtists"];
   onUploadBanner: () => void;
 }) {
   const swatches: string[] = (ACCENTS as readonly string[]).includes(look.accent) ? [...ACCENTS] : [...ACCENTS, look.accent];
@@ -564,7 +572,7 @@ function StylePanel({
                 size={16 * (f.scale ?? 1)}
                 weight={600}
                 color={on ? inkFor(look.accent) : colors.text}
-                style={f.family ? { fontFamily: f.family } : null}
+                style={f.family ? { fontFamily: fontName(f.family) } : null}
               >
                 {f.label}
               </Text>
@@ -582,7 +590,7 @@ function StylePanel({
       >
         {BANNERS.map((b) => (
           <BannerTile key={b.key} label={b.label} on={look.banner === b.key} onPress={() => onChange({ ...look, banner: b.key })}>
-            <Banner kind={b.key} accent={look.accent} width={116} height={64} fade={false} />
+            <Banner kind={b.key} accent={look.accent} width={116} height={64} fade={false} artists={artists} />
           </BannerTile>
         ))}
         {bannerUrl ? (

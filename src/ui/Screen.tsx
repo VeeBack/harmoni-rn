@@ -104,7 +104,7 @@ export function TopBar({
                 hitSlop={12}
                 style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
               >
-                <Icon name="chevron-left" size={26} color={colors.tint} />
+                <Icon name="chevron-left" size={26} color={colors.text} />
               </Press>
             ) : null)}
         </View>

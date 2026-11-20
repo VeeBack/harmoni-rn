@@ -13,6 +13,7 @@ export function NavRow({
   label,
   detail,
   onPress,
+  onLongPress,
   last,
 }: {
   icon?: IconName;
@@ -20,11 +21,14 @@ export function NavRow({
   label: string;
   detail?: string;
   onPress: () => void;
+  /** A menu for what it opens (Liked Songs: Play, Shuffle…). */
+  onLongPress?: () => void;
   last?: boolean;
 }) {
   return (
     <Press
       onPress={onPress}
+      onLongPress={onLongPress}
       feedback={false}
       scaleTo={1}
       highlight="rgba(255,255,255,0.06)"

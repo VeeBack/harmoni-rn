@@ -9,6 +9,8 @@ import { serverOrigin } from "@/api/client";
 export const songPath = (id: string) => `/song/${id}`;
 export const profilePath = (username: string) => `/u/${encodeURIComponent(username)}`;
 export const playlistPath = (id: string) => `/playlist/${id}`;
+export const albumPath = (id: string) => `/album/${encodeURIComponent(id)}`;
+export const artistPath = (id: string) => `/artist/${encodeURIComponent(id)}`;
 
 export const absolute = (path: string) => `${serverOrigin() ?? ""}${path}`;
 

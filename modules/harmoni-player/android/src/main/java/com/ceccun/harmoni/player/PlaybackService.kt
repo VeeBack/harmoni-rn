@@ -213,6 +213,7 @@ class PlaybackService : MediaLibraryService() {
       .setHandleAudioBecomingNoisy(true)
       .setWakeMode(C.WAKE_MODE_NETWORK)
       .build()
+    applyPrefs()
     player.addListener(ServiceListener())
 
     val open = packageManager.getLaunchIntentForPackage(packageName)?.apply {
@@ -252,7 +253,17 @@ class PlaybackService : MediaLibraryService() {
   override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
   override fun onTaskRemoved(rootIntent: Intent?) {
-    if (!isPlaybackOngoing) pauseAllPlayersAndStopSelf()
+    // Swiped away from recents: keep playing, unless nothing is or the person chose to stop.
+    if (!isPlaybackOngoing || Prefs.stopOnSwipe) pauseAllPlayersAndStopSelf()
+  }
+
+  /** Skip silence, and whether to give way when another app plays sound (Prefs). */
+  fun applyPrefs() {
+    player.skipSilenceEnabled = Prefs.skipSilence
+    player.setAudioAttributes(
+      AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+      !Prefs.playAlongside,
+    )
   }
 
   override fun onDestroy() {
@@ -283,7 +294,7 @@ class PlaybackService : MediaLibraryService() {
       .setDisplayName(if (liked) "Unlike" else "Like")
       .setSessionCommand(likeCommand)
       .build()
-    s.setMediaButtonPreferences(if (id == null) ImmutableList.of() else ImmutableList.of(heart))
+    s.setMediaButtonPreferences(if (id == null || !Prefs.mediaHeart) ImmutableList.of() else ImmutableList.of(heart))
   }
 
   private inner class ServiceListener : Player.Listener {
