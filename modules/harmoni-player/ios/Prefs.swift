@@ -26,7 +26,7 @@ enum Prefs {
     store.set(on, forKey: key)
   }
 
-  static var wifiOnlyDownloads: Bool { get("wifiOnlyDownloads") }
-  static var playAlongside: Bool { get("playAlongside") }
-  static var mediaHeart: Bool { get("mediaHeart") }
+  static var wifiOnlyDownloads: Bool { Prefs.get("wifiOnlyDownloads") }
+  static var playAlongside: Bool { Prefs.get("playAlongside") }
+  static var mediaHeart: Bool { Prefs.get("mediaHeart") }
 }
