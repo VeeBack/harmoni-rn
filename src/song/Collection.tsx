@@ -3,7 +3,7 @@ import { BlurTargetView } from "expo-blur";
 import { useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { StyleSheet, TextInput, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { Platform, StyleSheet, TextInput, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOut, interpolate, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,6 +22,7 @@ import { IconButton, Press } from "@/ui/Press";
 import { BlurTargetContext, TopBar } from "@/ui/Screen";
 import { Spinner } from "@/ui/Spinner";
 import { Text } from "@/ui/Text";
+import { iosShadow } from "@/ui/shadow";
 import { colors, fonts, radius } from "@/ui/theme";
 import { openSongMenu, type Extra } from "./menu";
 import { usePlaySong } from "./SongList";
@@ -147,6 +148,7 @@ export function Collection(p: CollectionProps) {
     opacity: interpolate(scrollY.value, [artSize * 0.2, artSize * 0.95], [1, 0], "clamp"),
   }));
 
+  const cover = p.art ?? <Artwork url={firstArt} size={artSize} radius={p.round ? artSize / 2 : radius.md} round={p.round} px={900} />;
   const header = (
     <View>
       <LinearGradient
@@ -163,7 +165,12 @@ export function Collection(p: CollectionProps) {
             artStyle,
           ]}
         >
-          {p.art ?? <Artwork url={firstArt} size={artSize} radius={p.round ? artSize / 2 : radius.md} round={p.round} px={900} />}
+          {IOS ? (
+            // iOS clips a view's shadow with its overflow, so the clip moves to an inner view there.
+            <View style={{ flex: 1, overflow: "hidden", borderRadius: p.round ? artSize / 2 : radius.md }}>{cover}</View>
+          ) : (
+            cover
+          )}
         </Animated.View>
         <View style={{ alignSelf: "stretch", alignItems: "center", marginTop: 22, gap: 2 }}>
           <Text variant="title2" align="center" numberOfLines={2}>
@@ -508,12 +515,15 @@ function Toolbar({
   );
 }
 
+const IOS = Platform.OS === "ios";
+
 const styles = StyleSheet.create({
   art: {
-    overflow: "hidden",
+    overflow: IOS ? "visible" : "hidden",
     backgroundColor: colors.surface2,
     elevation: 24,
     shadowColor: "#000",
+    ...iosShadow(24),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.06)",
   },

@@ -6,7 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import Native from "harmoni-player";
 import { router } from "expo-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { AppState, StyleSheet, View } from "react-native";
+import { AppState, Platform, StyleSheet, View } from "react-native";
 
 import { errorMessage, serverOrigin } from "@/api/client";
 import { Api } from "@/api/endpoints";
@@ -32,6 +32,9 @@ import { Text } from "@/ui/Text";
 import { colors, radius } from "@/ui/theme";
 import { openUpdateSheet, ProgressBar } from "@/update/UpdateSheet";
 import { checkForUpdate, currentBuild, currentVersion, downloadUpdate, retryUpdate, updatesHere, useUpdate } from "@/update/updater";
+
+/** The home-screen widget, the system equalizer and app links are Android's; iOS doesn't show those rows. */
+const ANDROID = Platform.OS === "android";
 
 /** An inset grouped section: a header, the rows in a rounded card, and a footnote under it. */
 function Group({ title, note, children }: { title: ReactNode; note?: ReactNode; children: ReactNode }) {
@@ -299,12 +302,12 @@ export default function Settings() {
         <Row title="Move with the music" note="In Now Playing, the background swells and glows with the bass.">
           <KvSwitch k="settings.bassBackdrop" initial />
         </Row>
-        {Native.canPinWidget() ? (
+        {ANDROID && Native.canPinWidget() ? (
           <Row title="Home screen widget" note="What's playing, with play, skip and back, right on your home screen.">
             <SmallButton label="Add" icon="plus" onPress={() => Native.pinWidget()} />
           </Row>
         ) : null}
-        <LinksRow />
+        {ANDROID ? <LinksRow /> : null}
         <Row title="Server" note={serverOrigin()?.replace(/^https?:\/\//, "")} />
       </Group>
       <UpdatesGroup />
@@ -375,12 +378,12 @@ function PlaybackGroup() {
       <Row title="Keep the screen on for lyrics" note="While the lyrics are showing, the screen won't dim or lock.">
         <Switch value={keepAwake} onChange={setKeepAwake} />
       </Row>
-      {Native.hasEqualizer() ? (
+      {ANDROID && Native.hasEqualizer() ? (
         <Row title="Equalizer" note="Shape the sound with your phone's equalizer." onPress={() => Native.openEqualizer()} />
       ) : null}
       <Row
         title="Load the next song early"
-        note="The next song starts straight away, even on a slow connection. Harmoni always does this on Android."
+        note={`The next song starts straight away, even on a slow connection. Harmoni always does this${ANDROID ? " on Android" : ""}.`}
       >
         <Icon name="check" size={20} color={colors.accent} />
       </Row>
@@ -741,7 +744,7 @@ function checkedAgo(at: number) {
 function UpdatesGroup() {
   const s = useUpdate();
   const [auto, setAuto] = useKvSwitch("settings.autoUpdate", true);
-  const version = `Harmoni for Android ${currentVersion}${currentBuild ? ` (${currentBuild})` : ""}`;
+  const version = `Harmoni for ${ANDROID ? "Android" : "iOS"} ${currentVersion}${currentBuild ? ` (${currentBuild})` : ""}`;
   if (!updatesHere()) {
     return (
       <Group title="Updates">

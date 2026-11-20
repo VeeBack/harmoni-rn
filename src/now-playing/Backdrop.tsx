@@ -1,6 +1,7 @@
+import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { memo, useEffect, useState } from "react";
-import { StyleSheet, View, useWindowDimensions } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -17,6 +18,10 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import type { ArtworkColors } from "harmoni-player";
 import { sized } from "@/ui/Artwork";
 import { bass } from "./bass";
+
+const IOS = Platform.OS === "ios";
+/** How much each cover is blurred before it's drawn (iOS leans on this harder: see `Blobs`). */
+const IMAGE_BLUR = IOS ? 40 : 12;
 
 /** The bass, shaped so kicks stand out and the hum underneath doesn't. */
 function kick(b: number) {
@@ -125,7 +130,8 @@ function Blobs({ art }: { art: string }) {
   }));
   const src = { uri: sized(art, 200) };
   // Android 12+ blurs the whole circle (soft edges); the image is also pre-blurred for older phones.
-  const blur = { filter: [{ blur: 60 }, { saturate: 1.8 }] } as object;
+  // iOS has no blur filter: it gets a heavier pre-blur and a blur over all three circles instead.
+  const blur = IOS ? null : ({ filter: [{ blur: 60 }, { saturate: 1.8 }] } as object);
   const big = 80 * vmax;
   return (
     <View style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
@@ -136,7 +142,7 @@ function Blobs({ art }: { art: string }) {
           s1,
         ]}
       >
-        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
+        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={IMAGE_BLUR} />
       </Animated.View>
       <Animated.View
         style={[
@@ -154,7 +160,7 @@ function Blobs({ art }: { art: string }) {
           s2,
         ]}
       >
-        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
+        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={IMAGE_BLUR} />
       </Animated.View>
       <Animated.View
         style={[
@@ -171,8 +177,9 @@ function Blobs({ art }: { art: string }) {
           s3,
         ]}
       >
-        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={12} />
+        <Image source={src} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={IMAGE_BLUR} />
       </Animated.View>
+      {IOS ? <BlurView style={StyleSheet.absoluteFill} intensity={100} tint="systemUltraThinMaterialDark" /> : null}
     </View>
   );
 }

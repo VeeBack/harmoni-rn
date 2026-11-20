@@ -19,6 +19,7 @@ import { Artwork } from "./Artwork";
 import { Icon, type IconName } from "./Icon";
 import { Press } from "./Press";
 import { Text } from "./Text";
+import { iosShadow } from "./shadow";
 import { colors, fonts, spring } from "./theme";
 
 /** The thick material menus and alerts are made of. */
@@ -629,6 +630,7 @@ const styles = StyleSheet.create({
     borderWidth: HAIR,
     borderColor: "rgba(255,255,255,0.1)",
     elevation: 12,
+    ...iosShadow(12),
     shadowColor: "#000",
   },
   hudInner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, minHeight: 46 },
@@ -640,6 +642,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     gap: 16,
     elevation: 24,
+    ...iosShadow(24),
     borderWidth: HAIR,
     borderColor: "rgba(255,255,255,0.08)",
   },
