@@ -196,10 +196,12 @@ jobs:
           (cd dist && zip -qry "harmoni-${APP_VERSION}.ipa" Payload && rm -rf Payload)
           ls -la dist
 
-      - uses: actions/upload-artifact@v4
+      # Uploaded as the .ipa itself (an IPA is already a zip), so the download is ready to sideload.
+      # Unarchived, the artifact takes the file's name: harmoni-<version>.ipa.
+      - uses: actions/upload-artifact@v7
         with:
-          name: harmoni-${{ env.APP_VERSION }}-ios
-          path: dist/*.ipa
+          path: dist/harmoni-${{ env.APP_VERSION }}.ipa
+          archive: false
           if-no-files-found: error
 
   ipa-release:
@@ -208,9 +210,10 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      # v8 leaves an unarchived artifact as it is (v4 would try to unzip it).
+      - uses: actions/download-artifact@v8
         with:
-          name: harmoni-1.0.${{ github.run_number }}-ios
+          name: harmoni-1.0.${{ github.run_number }}.ipa
           path: dist
 
       - uses: softprops/action-gh-release@v2
