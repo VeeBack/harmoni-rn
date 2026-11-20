@@ -17,14 +17,15 @@ import { Icon, type IconName } from "./Icon";
 import { Press } from "./Press";
 import { Spinner } from "./Spinner";
 import { Text } from "./Text";
-import { colors, radius } from "./theme";
+import { colors } from "./theme";
 
 /**
- * A section, as in Apple Music: a bold title; when it leads somewhere the whole
- * header is tappable and ends in a chevron.
+ * A section, as the web lays them out: a bold title with a quiet line under
+ * it, and "Show all" on the right when it leads somewhere.
  */
 export function Section({
   title,
+  subtitle,
   link,
   onLink,
   action,
@@ -33,6 +34,8 @@ export function Section({
   titleFont,
 }: {
   title: string;
+  subtitle?: string;
+  /** The link's words ("Show all"). */
   link?: string;
   onLink?: () => void;
   action?: ReactNode;
@@ -41,36 +44,38 @@ export function Section({
   /** A font family for the title (a profile's own font). */
   titleFont?: string;
 }) {
-  const header = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}>
-      <Text variant="title2" numberOfLines={1} style={[{ flexShrink: 1 }, titleFont ? { fontFamily: titleFont } : null]}>
-        {title}
-      </Text>
-      {onLink ? <Icon name="chevron-right" size={20} color={colors.text3} /> : null}
-    </View>
-  );
   return (
-    <View style={[{ marginTop: 36 }, style]}>
+    <View style={[{ marginTop: 40 }, style]}>
       <View
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, minHeight: 32 }}
+        style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 14, minHeight: 30 }}
       >
-        {onLink ? (
-          <Press
-            onPress={onLink}
-            feedback="tap"
-            scaleTo={1}
-            dim
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={link ? `${title}, ${link}` : title}
-            style={{ flexShrink: 1 }}
-          >
-            {header}
-          </Press>
-        ) : (
-          header
-        )}
-        {action}
+        <View style={{ flexShrink: 1, gap: 2 }}>
+          <Text variant="title2" numberOfLines={1} style={titleFont ? { fontFamily: titleFont } : null}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text variant="footnote" color={colors.text3} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {action ??
+          (onLink ? (
+            <Press
+              onPress={onLink}
+              feedback="tap"
+              scaleTo={0.96}
+              dim
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`${title}, ${link ?? "Show all"}`}
+              style={{ paddingBottom: subtitle ? 1 : 3 }}
+            >
+              <Text variant="footnote" weight={600} color={colors.text2}>
+                {link ?? "Show all"}
+              </Text>
+            </Press>
+          ) : null)}
       </View>
       {children}
     </View>
@@ -196,7 +201,7 @@ export function SongRowsSkeleton({ n = 5 }: { n?: number }) {
   );
 }
 
-/** The 48px cream play button. */
+/** The round cream play button (white over artwork and colour). */
 export function PlayButton({
   playing,
   loading,
@@ -205,6 +210,7 @@ export function PlayButton({
   bg = colors.accent,
   fg = colors.accentInk,
   label,
+  flat,
 }: {
   playing?: boolean;
   loading?: boolean;
@@ -213,6 +219,8 @@ export function PlayButton({
   bg?: string;
   fg?: string;
   label?: string;
+  /** No shadow (on a card, where the art already lifts it). */
+  flat?: boolean;
 }) {
   return (
     <Press
@@ -227,11 +235,11 @@ export function PlayButton({
         backgroundColor: bg,
         alignItems: "center",
         justifyContent: "center",
-        elevation: 6,
+        elevation: flat ? 0 : 6,
         shadowColor: "#000",
       }}
     >
-      {loading ? <Spinner size={size * 0.46} color={fg} /> : <Icon name={playing ? "pause" : "play"} size={size * 0.46} color={fg} />}
+      {loading ? <Spinner size={size * 0.42} color={fg} /> : <Icon name={playing ? "pause" : "play"} size={size * 0.44} color={fg} />}
     </Press>
   );
 }
@@ -317,5 +325,45 @@ export function CenterSpinner() {
     <View style={{ paddingVertical: 48, alignItems: "center" }}>
       <Spinner size={28} color={colors.text2} />
     </View>
+  );
+}
+
+/** A filter or sort pill: cream when it's the one chosen. */
+export function Chip({
+  label,
+  selected,
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  selected?: boolean;
+  icon?: IconName;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Press
+      onPress={onPress}
+      feedback={selected ? false : "select"}
+      scaleTo={0.95}
+      accessibilityRole={icon ? "button" : "tab"}
+      accessibilityState={icon ? undefined : { selected: !!selected }}
+      accessibilityLabel={accessibilityLabel ?? label}
+      style={{
+        height: 34,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        backgroundColor: selected ? colors.accent : colors.surface2,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      {icon ? <Icon name={icon} size={15} color={selected ? colors.accentInk : colors.text} /> : null}
+      <Text variant="footnote" weight={600} color={selected ? colors.accentInk : colors.text}>
+        {label}
+      </Text>
+    </Press>
   );
 }

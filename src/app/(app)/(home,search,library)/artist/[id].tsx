@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
 import { Api } from "@/api/endpoints";
@@ -11,15 +11,16 @@ import type { AlbumCard, Artist } from "@/api/types";
 import { plural, shortDate } from "@/lib/format";
 import { useArtworkColors, usePlayback } from "@/player/hooks";
 import { player } from "@/player/player";
-import { CardLink, useGridWidth } from "@/song/cards";
+import { ArtistRow, CardLink, useGridWidth } from "@/song/cards";
+import { openCollectionMenu } from "@/song/collections";
 import { SongList } from "@/song/SongList";
 import { Artwork, sized } from "@/ui/Artwork";
 import { EmptyState, PlayButton, Section, Skeleton } from "@/ui/bits";
 import { Icon } from "@/ui/Icon";
 import { IconButton, Press } from "@/ui/Press";
 import { Screen } from "@/ui/Screen";
-import { Text } from "@/ui/Text";
-import { colors } from "@/ui/theme";
+import { Kicker, Text } from "@/ui/Text";
+import { colors, bgAlpha } from "@/ui/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TOPBAR } from "@/shell/layout";
 
@@ -82,19 +83,15 @@ function Hero({ a }: { a: Artist }) {
       {a.bannerUrl ? (
         <>
           <Image
-            source={{ uri: a.bannerUrl }}
+            source={{ uri: sized(a.bannerUrl, 1024) }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             contentPosition={{ top: "30%" }}
             transition={300}
           />
+          <LinearGradient colors={[bgAlpha(0), bgAlpha(0.55), colors.bg]} locations={[0.35, 0.68, 1]} style={StyleSheet.absoluteFill} />
           <LinearGradient
-            colors={["rgba(12,11,10,0)", "rgba(12,11,10,0.55)", colors.bg]}
-            locations={[0.35, 0.68, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-            colors={["rgba(12,11,10,0.45)", "rgba(12,11,10,0)"]}
+            colors={[bgAlpha(0.45), bgAlpha(0)]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 0.3 }}
             style={StyleSheet.absoluteFill}
@@ -109,11 +106,17 @@ function Hero({ a }: { a: Artist }) {
             <Artwork url={a.imageUrl} size={120} round />
           </View>
         ) : null}
-        <View style={{ flex: 1, gap: 10 }}>
+        <View style={{ flex: 1, gap: 8 }}>
+          <Kicker color="rgba(255,255,255,0.72)">Artist</Kicker>
           <Text
-            size={40}
-            weight={800}
-            style={{ letterSpacing: -1.2, lineHeight: 44, textShadowColor: "rgba(0,0,0,0.3)", textShadowRadius: 24 }}
+            size={a.name.length > 14 ? 38 : 46}
+            weight={700}
+            style={{
+              letterSpacing: a.name.length > 14 ? -1.3 : -1.6,
+              lineHeight: a.name.length > 14 ? 41 : 48,
+              textShadowColor: "rgba(0,0,0,0.3)",
+              textShadowRadius: 24,
+            }}
           >
             {a.name}
           </Text>
@@ -123,8 +126,9 @@ function Hero({ a }: { a: Artist }) {
             </Text>
           ) : null}
           {a.popular.length ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 }}>
               <PlayButton
+                size={56}
                 label={`Play ${a.name}`}
                 playing={current && pb.playing}
                 onPress={() => (current ? player.toggle() : player.play(a.popular, 0))}
@@ -153,7 +157,7 @@ function Pill({ label, onPress }: { label: string; onPress: () => void }) {
       hitSlop={8}
       style={{ alignSelf: "flex-start", paddingVertical: 8, marginTop: 8 }}
     >
-      <Text variant="callout" weight={600} color={colors.tint}>
+      <Text variant="subhead" weight={600} color={colors.text2}>
         {label}
       </Text>
     </Press>
@@ -175,7 +179,7 @@ function Grid({ title, items }: { title: string; items: AlbumCard[] }) {
             subtitle={[al.releaseDate?.slice(0, 4), al.kind ? KIND[al.kind] : null].filter(Boolean).join(" · ")}
             artwork={al.artworkUrl}
             width={w}
-            onPress={() => router.push(`/album/${al.id}`)}
+            collection={{ kind: "album", id: al.id, name: al.title }}
           />
         ))}
       </View>
@@ -207,6 +211,12 @@ function Body({ a }: { a: Artist }) {
         <Section title="Latest release" style={{ marginTop: 40 }}>
           <Press
             onPress={() => router.push(`/album/${a.latest!.id}`)}
+            onLongPress={() =>
+              openCollectionMenu(
+                { kind: "album", id: a.latest!.id, name: a.latest!.title, artist: { id: a.id, name: a.name } },
+                { artwork: a.latest!.artworkUrl },
+              )
+            }
             feedback="tap"
             scaleTo={0.98}
             style={{ flexDirection: "row", alignItems: "center", gap: 16 }}
@@ -215,10 +225,10 @@ function Body({ a }: { a: Artist }) {
               <Artwork url={a.latest.artworkUrl} size={120} radius={10} px={400} />
             </View>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text variant="caption" weight={600} color={colors.text2} style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>
+              <Kicker>
                 {a.latest.kind ? KIND[a.latest.kind] : "Release"}
                 {a.latest.releaseDate ? ` · ${shortDate(a.latest.releaseDate)}` : ""}
-              </Text>
+              </Kicker>
               <Text variant="headline" numberOfLines={2}>
                 {a.latest.title}
               </Text>
@@ -256,27 +266,7 @@ function Body({ a }: { a: Artist }) {
 
       {a.related.length ? (
         <Section title="Fans also like">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginHorizontal: -20 }}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 24 }}
-          >
-            {a.related.map((r) => (
-              <Press
-                key={r.id}
-                onPress={() => router.push(`/artist/${r.id}`)}
-                feedback="tap"
-                scaleTo={0.96}
-                style={{ width: 148, gap: 10, alignItems: "center" }}
-              >
-                <Artwork url={sized(r.imageUrl, 450)} size={148} round fallback="user" />
-                <Text variant="subhead" weight={500} numberOfLines={1} align="center" style={{ width: 148 }}>
-                  {r.name}
-                </Text>
-              </Press>
-            ))}
-          </ScrollView>
+          <ArtistRow artists={a.related} />
         </Section>
       ) : null}
     </View>

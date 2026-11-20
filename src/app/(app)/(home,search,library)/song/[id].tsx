@@ -44,18 +44,18 @@ export default function SongScreen() {
                   .toggleLike(song)
                   .catch(() => toast("Couldn't save that. Try again?", "error"))
               }
-              size={40}
+              size={42}
               feedback={liked ? "toggleOff" : "confirm"}
             >
-              <Icon name={liked ? "heart-solid" : "heart"} size={22} color={liked ? colors.accent : colors.tint} />
+              <Icon name={liked ? "heart-solid" : "heart"} size={22} color={liked ? colors.accent : colors.text2} />
             </IconButton>
             <IconButton
               label="Share"
               onPress={() => shareLink(songPath(song.id), song.title)}
               onLongPress={() => copyLink(songPath(song.id)).then((ok) => ok && toast("Link copied"))}
-              size={40}
+              size={42}
             >
-              <Icon name="share" size={21} color={colors.tint} />
+              <Icon name="share" size={22} color={colors.text2} />
             </IconButton>
           </View>
         ) : undefined

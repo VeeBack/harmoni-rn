@@ -12,7 +12,9 @@ import { errorMessage, serverOrigin } from "@/api/client";
 import { Api } from "@/api/endpoints";
 import type { ImportProgress, Invite } from "@/api/types";
 import { removeAllDownloads, useDownloads } from "@/downloads/downloads";
-import { readAppleLibrary } from "@/lib/apple-library";
+import { readAppleLibrary, type AppleLibrary } from "@/lib/apple-library";
+import type { ImportLibrary } from "@/lib/import-library";
+import { readSpotifyFiles } from "@/lib/spotify-library";
 import { bytes, plural, shortDate } from "@/lib/format";
 import { hapticsEnabled, setHapticsEnabled } from "@/lib/haptics";
 import { profilePath } from "@/lib/share";
@@ -559,6 +561,14 @@ function InvitesGroup({ days }: { days: number }) {
   );
 }
 
+const songCount = (n: number) => `${n.toLocaleString()} ${n === 1 ? "song" : "songs"}`;
+const monthYear = (sec: number) => new Date(sec * 1000).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+/** "a, b and c", skipping empties. */
+function listOf(parts: string[]): string {
+  const p = parts.filter(Boolean);
+  return p.length > 1 ? `${p.slice(0, -1).join(", ")} and ${p[p.length - 1]}` : (p[0] ?? "Nothing");
+}
+
 function ImportGroup() {
   const [reading, setReading] = useState(false);
   const q = useQuery({
@@ -572,24 +582,57 @@ function ImportGroup() {
   const p = q.data;
   const [showMissing, setShowMissing] = useState(false);
 
+  // Apple Music's Library.xml, or the zips Spotify emails: read here, on the
+  // phone, so only the songs, playlists and plays in them are sent.
   const choose = async () => {
-    const r = await DocumentPicker.getDocumentAsync({ type: ["text/xml", "application/xml", "*/*"], copyToCacheDirectory: true });
-    if (r.canceled || !r.assets?.[0]) return;
+    const r = await DocumentPicker.getDocumentAsync({
+      type: ["application/zip", "application/json", "text/xml", "application/xml", "*/*"],
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (r.canceled || !r.assets?.length) return;
     setReading(true);
+    // Let "Reading…" show before the unzipping takes the thread.
+    await new Promise((done) => setTimeout(done, 60));
     try {
-      const xml = await new File(r.assets[0].uri).text();
-      let lib;
-      try {
-        lib = readAppleLibrary(xml);
-      } catch {
-        toast("That doesn't look like a Library.xml from Apple Music or iTunes.", "error");
-        return;
+      const xml = r.assets.find((a) => /\.xml$/i.test(a.name) || /xml/.test(a.mimeType ?? ""));
+      let lib: AppleLibrary | ImportLibrary;
+      let note: string;
+      if (xml) {
+        try {
+          lib = readAppleLibrary(await new File(xml.uri).text());
+        } catch {
+          toast("That doesn't look like a Library.xml from Apple Music or iTunes.", "error");
+          return;
+        }
+        const liked = lib.tracks.filter((t) => t.inLibrary).length;
+        note = listOf([
+          `${songCount(liked)} in your library`,
+          plural(lib.playlists.length, "playlist"),
+          `${songCount(lib.tracks.length)} in all`,
+        ]);
+      } else {
+        const files = await Promise.all(r.assets.map(async (a) => ({ name: a.name, bytes: await new File(a.uri).bytes() })));
+        let spotify: ImportLibrary;
+        try {
+          spotify = readSpotifyFiles(files);
+        } catch (e) {
+          toast(e instanceof Error ? e.message : "That doesn't look like your Spotify data.", "error");
+          return;
+        }
+        lib = spotify;
+        const liked = spotify.tracks.filter((t) => t.inLibrary).length;
+        const listens = spotify.listens ?? [];
+        note = listOf([
+          liked ? `${songCount(liked)} from Liked Songs` : "",
+          spotify.playlists.length ? plural(spotify.playlists.length, "playlist") : "",
+          // Oldest first.
+          listens.length ? `${listens.length.toLocaleString()} plays since ${monthYear(listens[0][1])}` : "",
+        ]);
       }
-      const songs = lib.tracks.filter((t) => t.inLibrary).length;
-      const inPlaylists = lib.playlists.reduce((a, pl) => a + pl.trackIds.length, 0);
       const yes = await confirm({
-        title: "Bring in your Apple Music library?",
-        note: `${songs.toLocaleString()} songs in your library, ${plural(lib.playlists.length, "playlist")} and ${inPlaylists.toLocaleString()} songs in all. They're added to what you have here; nothing is removed.`,
+        title: `Bring in your ${xml ? "Apple Music" : "Spotify"} library?`,
+        note: `${note}. They're added to what you have here; nothing is removed.`,
         confirm: "Bring it in",
       });
       if (!yes) return;
@@ -634,14 +677,20 @@ function ImportGroup() {
   );
 
   const missing = p?.status === "done" ? (p.summary?.missing ?? []) : [];
+  const name = p?.source === "spotify" ? "Spotify" : "Apple Music";
+  const listening = p?.summary?.listens
+    ? `${p.summary.listens.toLocaleString()} plays`
+    : p?.summary
+      ? `play counts for ${songCount(p.summary.listening)}`
+      : "";
   return (
     <Group
       title="Bring your music"
-      note="Your Apple Music library, playlists and play counts. In Music or iTunes on a computer, choose File → Library → Export Library…, then pick the file here."
+      note="Your library, playlists and listening from Apple Music or Spotify. Choose the file below: it's read on this phone, and only the music in it is sent."
     >
       {p?.status === "adding" ? (
         <>
-          <Row first title="Bringing in your library" note={`${p.done.toLocaleString()} of ${p.total.toLocaleString()} songs`}>
+          <Row first title={`Bringing in your ${name} library`} note={`${p.done.toLocaleString()} of ${p.total.toLocaleString()} songs`}>
             <SmallButton label="Stop" onPress={stop} />
           </Row>
           {meter(p.done, p.total)}
@@ -650,53 +699,56 @@ function ImportGroup() {
         <>
           <Row
             first
-            title="Your library is in"
-            note={`${p.summary.liked.toLocaleString()} songs added to your likes, ${plural(p.summary.playlists.length, "playlist")}. Now looking up the ${p.toImprove.toLocaleString()} songs new to Harmoni for their artwork and details: ${p.improved.toLocaleString()} so far. They all play in the meantime.`}
+            title={`Your ${name} library is in`}
+            note={`${songCount(p.summary.liked)} added to your likes, ${plural(p.summary.playlists.length, "playlist")}, ${listening}. Now looking up the ${p.toImprove.toLocaleString()} songs new to Harmoni for their artwork and details: ${p.improved.toLocaleString()} so far. They all play in the meantime.`}
           >
             <SmallButton label="Stop" onPress={stop} />
           </Row>
           {meter(p.improved, p.toImprove)}
         </>
       ) : (
-        <Row
-          first
-          title="Apple Music"
-          note={
-            p?.status === "done" && p.summary
-              ? `Brought in ${shortDate(p.summary.appliedAt)}: ${p.summary.liked.toLocaleString()} songs added to your likes, ${plural(p.summary.playlists.length, "playlist")}, and play counts for ${p.summary.listening.toLocaleString()} songs. Bringing it in again adds anything new.`
-              : p?.status === "failed"
-                ? (p.error ?? "That didn't work. Try again?")
-                : "Nothing here yet."
-          }
-        >
-          {reading ? (
-            <Text size={13} color={colors.text2}>
-              Reading…
-            </Text>
-          ) : p?.status === "done" ? (
-            <SmallButton label="Again" icon="plus" onPress={choose} />
-          ) : (
-            <Press
-              onPress={choose}
-              feedback="tap"
-              scaleTo={0.95}
-              style={{
-                height: 34,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                backgroundColor: colors.accent,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Icon name="plus" size={15} color={colors.accentInk} />
-              <Text size={13} weight={500} color={colors.accentInk}>
-                Choose file
-              </Text>
-            </Press>
-          )}
-        </Row>
+        <>
+          {p?.status === "done" && p.summary ? (
+            <Row
+              first
+              title={name}
+              note={`Brought in ${shortDate(p.summary.appliedAt)}: ${songCount(p.summary.liked)} added to your likes, ${plural(p.summary.playlists.length, "playlist")} and ${listening}. Bringing it in again adds anything new.`}
+            />
+          ) : p?.status === "failed" ? (
+            <Row first title={name} note={p.error ?? "That didn't work. Try again?"} />
+          ) : null}
+          <Row
+            first={p?.status !== "done" && p?.status !== "failed"}
+            title={reading ? "Reading…" : "Choose your Spotify zip or Library.xml"}
+            note={
+              "Spotify: ask for your data at spotify.com/account/privacy, and tick Extended streaming history too, for every play you've made. Spotify emails a zip for each: choose them as they are, no need to unzip.\n\nApple Music: in Music or iTunes on a computer, File → Library → Export Library…"
+            }
+          >
+            {reading ? null : p?.status === "done" ? (
+              <SmallButton label="Choose" icon="plus" onPress={choose} />
+            ) : (
+              <Press
+                onPress={choose}
+                feedback="tap"
+                scaleTo={0.95}
+                style={{
+                  height: 34,
+                  paddingHorizontal: 14,
+                  borderRadius: 999,
+                  backgroundColor: colors.accent,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="plus" size={15} color={colors.accentInk} />
+                <Text size={13} weight={600} color={colors.accentInk}>
+                  Choose files
+                </Text>
+              </Press>
+            )}
+          </Row>
+        </>
       )}
       {missing.length ? (
         <>

@@ -2,16 +2,11 @@ import { Image } from "expo-image";
 import { memo } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { sized } from "@/lib/art";
 import { Icon, type IconName } from "./Icon";
 import { colors, radius as r } from "./theme";
 
-/** Bigger artwork for YouTube Music URLs, which carry their size in the URL. */
-export function sized(url: string | undefined, px: number): string | undefined {
-  if (!url) return url;
-  const m = url.match(/=w(\d+)-h(\d+)/);
-  if (m && Number(m[1]) < px) return url.replace(/=w\d+-h\d+/, `=w${px}-h${px}`);
-  return url;
-}
+export { sized };
 
 export const Artwork = memo(function Artwork({
   url,

@@ -4,6 +4,7 @@ import { memo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
+import { sized } from "@/lib/art";
 import { Text } from "@/ui/Text";
 
 const GRAIN = require("../../assets/images/grain.png");
@@ -42,12 +43,12 @@ export const SpiceArt = memo(function SpiceArt({ name, covers = [], label = true
       </Svg>
       {w > 0 && covers[0] ? (
         <View style={{ position: "absolute", left: -0.3 * w, top: -0.3 * w, width: 1.4 * w, height: 1.2 * w, opacity: 0.85, filter: [{ blur: w * 0.14 }, { saturate: 1.7 }] } as object}>
-          <Image source={{ uri: covers[0] }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={{ uri: sized(covers[0], 256) }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
         </View>
       ) : null}
       {w > 0 && covers[1] ? (
         <View style={{ position: "absolute", left: 0.25 * w, top: 0.3 * w, width: 1.05 * w, height: 1.0 * w, opacity: 0.6, filter: [{ blur: w * 0.14 }, { saturate: 1.7 }] } as object}>
-          <Image source={{ uri: covers[1] }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={{ uri: sized(covers[1], 256) }} blurRadius={6} style={StyleSheet.absoluteFill} contentFit="cover" />
         </View>
       ) : null}
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">

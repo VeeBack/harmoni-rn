@@ -2,7 +2,7 @@
 
 A native Android app for [Harmoni](../harmoni-next) servers, built with React Native (Expo SDK 58) and a local Kotlin module for playback. It works with any Harmoni server that supports app sign-in (OAuth): you type the server's address, sign in on the server's own page in a Custom Tab, and come back signed in.
 
-It does everything the web app does (Home, Search, Library, Liked Songs, Recently Played, your Daily Spice, playlists and sharing them, albums, artists, Spices and the seed picker, profiles and following, people in search, song links, synced lyrics, the queue, autoplay, Harmoni Link, invites, Apple Music import, account settings), plus things only an app can:
+It does everything the web app does (Home, Search, Library, Liked Songs, Recently Played, your Daily Spice, playlists and sharing them, albums, artists, Spices and the seed picker, profiles and following, people in search, song links, synced lyrics, the queue, autoplay, Harmoni Link, invites, Apple Music and Spotify import, account settings), plus things only an app can:
 
 - **Background playback** with a Media3 `MediaSessionService`: notification, lock screen and Bluetooth controls, a heart button in the media controls, headset buttons, audio focus, and pausing when headphones come out.
 - **Downloads** for offline listening (songs, albums, playlists, Spices, or everything you like), stored in Media3's download cache, so playback finds them automatically. They save in the order they're on screen, top to bottom, and whatever list you have open goes first (`Downloads.kt` keeps the line itself: Media3 only orders by when songs were added). Each song shows a ring while it waits and fills. The Downloads page is your library as it is on the phone: Liked Songs, your playlists and Spices, each with just the songs saved, all of it offline.
@@ -28,7 +28,8 @@ It does everything the web app does (Home, Search, Library, Liked Songs, Recentl
 | `src/now-playing/` | The full-screen player: backdrop, lyrics, queue, transport. |
 | `src/profile/` | Profiles (banners drawn with Skia from the person's colour, their fonts, editing in place), people, following and the playlist share sheet. |
 | `src/update/` | Updating from GitHub Releases: the check, the Software Update sheet, and the Updates rows in Settings. |
-| `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, menus, collection screens, Spice art, and the design system. |
+| `src/home/` | Home's hero (your Spice, coloured from its covers, with a fan of them) and shortcut tiles. |
+| `src/song/`, `src/spice/`, `src/ui/` | Rows, cards, tiles, menus (`collections.ts` plays or opens any collection), collection screens, Spice art, and the design system (`theme.ts` shares the web's tokens). |
 | `modules/harmoni-player/` | Kotlin: `PlaybackService` (Media3), `BassMeter`, `Downloads`, `Updater`, `NowPlayingWidget`, `AuthStore` (Keystore-encrypted tokens, refreshed natively so background playback never loses them), and the JS bridge. |
 
 Two things worth knowing about the design:

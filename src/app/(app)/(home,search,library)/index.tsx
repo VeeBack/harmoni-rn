@@ -1,45 +1,68 @@
 import { useQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
 import { Api } from "@/api/endpoints";
-import type { Home as HomeData, Shelf, Song } from "@/api/types";
-import { greeting, joinNames, plural, sameList } from "@/lib/format";
-import { inkFor, useArtworkColors, usePlayback } from "@/player/hooks";
+import type { ArtistCard, Home as HomeData, Shelf, Song } from "@/api/types";
+import { Hero, HeroPill, HeroSkeletonShape } from "@/home/Hero";
+import { Shortcuts } from "@/home/Shortcuts";
+import { whenPhrase } from "@/lib/day-part";
+import { greeting, plural, sameList } from "@/lib/format";
+import { usePlayback } from "@/player/hooks";
 import { player } from "@/player/player";
-import { sized } from "@/ui/Artwork";
-import { ArtistRow, CardLink, Shelf as CardShelf, SongCard, useShelfWidth } from "@/song/cards";
-import { SongList } from "@/song/SongList";
+import { ArtistRow, CardLink, Shelf as CardShelf, SongCard, SpiceCardLink, useShelfWidth } from "@/song/cards";
+import { openCollectionMenu, runCollection, useIsLoading, type CollectionRef } from "@/song/collections";
+import { SongTiles } from "@/song/tiles";
+import { DAILY_SPICE_HREF, useDailySpice } from "@/spice/daily";
+import { useCollections } from "@/state/collections";
 import { useSession } from "@/state/session";
 import { searchFocus } from "@/shell/state";
-import { Button } from "@/ui/Button";
 import { EmptyState, PlayButton, Section, Skeleton } from "@/ui/bits";
 import { Screen } from "@/ui/Screen";
-import { Icon } from "@/ui/Icon";
-import { Press } from "@/ui/Press";
-import { Text } from "@/ui/Text";
-import { colors, radius } from "@/ui/theme";
+import { Kicker, Text } from "@/ui/Text";
 
+const today = () => new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+/** The date and greeting, kept fresh across midnight and the day's parts. */
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+// Home, top to bottom (the web's): who it's for and when; the one thing to
+// play now, then the places you go most; then shelves, most personal first.
 export default function Home() {
   const me = useSession((s) => s.me);
   const q = useQuery({ queryKey: ["home"], queryFn: Api.home });
   const data = q.data;
+  useNow();
   return (
-    <Screen tab="(home)" title="Home" large refreshing={q.isRefetching} onRefresh={() => q.refetch()}>
+    <Screen tab="(home)" title="Home" titleAt={64} refreshing={q.isRefetching} onRefresh={() => q.refetch()}>
+      <View style={{ marginTop: 8, marginBottom: 16 }}>
+        <Kicker color="rgba(244,243,241,0.53)">{today()}</Kicker>
+        <Text variant="display" style={{ marginTop: 6 }}>
+          {greeting(me?.name)}
+        </Text>
+      </View>
       {!data ? (
         q.isError ? (
-          <View style={{ marginTop: 24 }}>
-            <EmptyState title="Couldn't load your home" body="Something went wrong talking to the server. Pull down to try again." icon="cloud-off" />
-          </View>
+          <EmptyState
+            title="Couldn't load your home"
+            body="Something went wrong talking to the server. Pull down to try again."
+            icon="cloud-off"
+          />
         ) : (
           <HomeSkeleton />
         )
       ) : (
-        <Animated.View entering={FadeIn.duration(260)}>
-          <HomeBody data={data} name={me?.name} />
+        <Animated.View entering={FadeIn.duration(280)}>
+          <HomeBody data={data} />
         </Animated.View>
       )}
     </Screen>
@@ -49,10 +72,15 @@ export default function Home() {
 function HomeSkeleton() {
   const w = useShelfWidth();
   return (
-    <View style={{ marginTop: 8 }}>
-      <Skeleton height={320} radius={24} />
-      <View style={{ marginTop: 32, gap: 16 }}>
-        <Skeleton width={200} height={28} />
+    <View>
+      <HeroSkeletonShape />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} width="48.8%" height={56} radius={12} style={{ flexGrow: 1 }} />
+        ))}
+      </View>
+      <View style={{ marginTop: 40, gap: 14 }}>
+        <Skeleton width={180} height={24} />
         <View style={{ flexDirection: "row", gap: 14 }}>
           <Skeleton width={w} height={w} radius={16} />
           <Skeleton width={w} height={w} radius={16} />
@@ -63,44 +91,63 @@ function HomeSkeleton() {
   );
 }
 
-function HomeBody({ data, name }: { data: HomeData; name?: string }) {
+function HomeBody({ data }: { data: HomeData }) {
   const w = useShelfWidth();
+  const collections = useCollections();
   const fresh = !data.recent.length && !data.liked.length;
-  const mix = data.shelves?.find((s) => s.kind === "mix") as { kind: "mix"; songs: Song[] } | undefined;
+  const shelves = data.shelves ?? [];
   return (
     <View>
-      <Hero data={data} name={name} mix={mix} fresh={fresh} />
+      {data.shelves && !fresh ? <SpiceHero recent={data.recent} /> : fresh ? <WelcomeHero /> : <ResumeHero recent={data.recent} />}
+      <Shortcuts />
 
       {data.recent.length ? (
-        <Section title="Jump back in" link="See all" onLink={() => router.push("/recent")}>
+        <Section title="Jump back in" subtitle="What you've been playing lately" onLink={() => router.push("/recent")}>
           <CardShelf itemWidth={w}>
-            {data.recent.slice(0, 6).map((s, i) => (
-              <SongCard key={s.id} song={s} list={data.recent} index={i} width={w} />
+            {data.recent.slice(0, 16).map((s, i) => (
+              <SongCard key={`${s.id}-${i}`} song={s} list={data.recent} index={i} width={w} />
             ))}
           </CardShelf>
         </Section>
       ) : null}
 
-      {data.shelves?.map((shelf, i) => <ShelfView key={`${shelf.kind}${i}`} shelf={shelf} width={w} />)}
+      {shelves.map((shelf, i) => (
+        <PersonalShelf key={`${shelf.kind}${i}`} shelf={shelf} width={w} />
+      ))}
 
-      {data.shelves && !data.shelves.length && !fresh ? (
+      {data.shelves && !shelves.length && !fresh ? (
         <Section title="Made for you">
-          <EmptyState title="Your mixes are on the way" body="Harmoni is learning what you like. Keep listening and your home screen will fill with picks for you." />
+          <EmptyState
+            icon="sparkle"
+            title="Your mixes are on the way"
+            body="Harmoni is learning what you like. Keep listening and your home screen will fill with picks for you."
+          />
         </Section>
       ) : null}
 
       {data.liked.length ? (
-        <Section title="Songs you love" link="See all" onLink={() => router.push("/liked")}>
-          <SongList songs={data.liked.slice(0, 6)} />
+        <Section title="Songs you love" subtitle="Your latest likes" onLink={() => router.push("/liked")}>
+          <SongTiles songs={data.liked.slice(0, 16)} />
         </Section>
       ) : null}
 
-      {data.playlists.length ? (
-        <Section title="Your playlists">
+      {collections.length ? (
+        <Section title="Your playlists and Spices" onLink={() => router.navigate("/library" as never)}>
           <CardShelf itemWidth={w}>
-            {data.playlists.map((p) => (
-              <CardLink key={p.id} title={p.name} subtitle={plural(p.count, "song")} artwork={p.artworks[0]} width={w} onPress={() => router.push(`/playlist/${p.id}`)} />
-            ))}
+            {collections.map((c) =>
+              c.type === "playlist" ? (
+                <CardLink
+                  key={`p${c.id}`}
+                  title={c.name}
+                  subtitle={`Playlist · ${plural(c.count, "song")}`}
+                  artwork={c.artworks[0]}
+                  width={w}
+                  collection={{ kind: "playlist", id: c.id, name: c.name }}
+                />
+              ) : (
+                <SpiceCardLink key={`s${c.id}`} spice={c} width={w} />
+              ),
+            )}
           </CardShelf>
         </Section>
       ) : null}
@@ -108,6 +155,7 @@ function HomeBody({ data, name }: { data: HomeData; name?: string }) {
       {data.shelves === undefined && !fresh ? (
         <Section title="Made for you">
           <EmptyState
+            icon="sparkle"
             title="Get mixes made for you"
             body="Turn on Super Processing and Harmoni learns what you like from how you listen, then fills this page with new finds, old favourites and a mix of its own."
             action="Turn it on in Settings"
@@ -119,6 +167,7 @@ function HomeBody({ data, name }: { data: HomeData; name?: string }) {
       {fresh ? (
         <Section title="How Harmoni works">
           <EmptyState
+            icon="globe"
             title="One search, every source"
             body="Search once and Harmoni asks YouTube Music, Deezer, iTunes and TIDAL together, then merges the results so each song shows up once. If one source goes down, your music keeps playing from another."
           />
@@ -128,133 +177,142 @@ function HomeBody({ data, name }: { data: HomeData; name?: string }) {
   );
 }
 
-function ShelfView({ shelf, width }: { shelf: Shelf; width: number }) {
+function PersonalShelf({ shelf, width }: { shelf: Shelf; width: number }) {
   switch (shelf.kind) {
     case "mix":
-      return shelf.songs.length ? (
-        <Section title="From your mix">
-          <SongList songs={shelf.songs.slice(0, 6)} />
-        </Section>
-      ) : null;
+      return <SongShelf title="From your mix" subtitle="New music picked from how you listen" songs={shelf.songs} width={width} />;
+    case "because":
+      return (
+        <SongShelf
+          title={`More like ${shelf.seed.title}`}
+          subtitle={`Because you play ${shelf.seed.artists[0]?.name ?? "it"}`}
+          songs={shelf.songs}
+          width={width}
+        />
+      );
+    case "repeat":
+      return <SongShelf title="On repeat" subtitle="The songs you can't stop playing" songs={shelf.songs} width={width} />;
     case "rediscover":
       return shelf.songs.length ? (
-        <Section title="Rediscover">
-          <SongList songs={shelf.songs.slice(0, 6)} />
-        </Section>
-      ) : null;
-    case "because":
-    case "repeat":
-      return shelf.songs.length ? (
-        <Section title={shelf.kind === "because" ? `More like ${shelf.seed.title}` : "On repeat"}>
-          <CardShelf itemWidth={width}>
-            {shelf.songs.slice(0, 6).map((s, i) => (
-              <SongCard key={s.id} song={s} list={shelf.songs} index={i} width={width} />
-            ))}
-          </CardShelf>
+        <Section title="Rediscover" subtitle="Old favourites you haven't heard in a while">
+          <SongTiles songs={shelf.songs} />
         </Section>
       ) : null;
     case "artists":
+      return <ArtistShelf title="Artists you might like" artists={shelf.artists} />;
     case "top-artists":
-      return shelf.artists.length ? (
-        <Section title={shelf.kind === "artists" ? "Artists you might like" : "Your top artists"}>
-          <ArtistRow artists={shelf.artists} />
-        </Section>
-      ) : null;
+      return <ArtistShelf title="Your top artists" artists={shelf.artists} />;
   }
 }
 
-function distinctArtists(songs: Song[], max: number): string[] {
-  const out: string[] = [];
-  for (const s of songs) {
-    const n = s.artists[0]?.name;
-    if (n && !out.includes(n)) out.push(n);
-    if (out.length >= max) break;
-  }
-  return out;
-}
-
-function Hero({ data, name, mix, fresh }: { data: HomeData; name?: string; mix?: { kind: "mix"; songs: Song[] }; fresh: boolean }) {
-  const pb = usePlayback();
-  const eyebrow = greeting(name);
-  let title: string;
-  let text: string;
-  let songs: Song[] = [];
-  let label = "";
-  if (mix && mix.songs.length) {
-    songs = mix.songs;
-    const names = distinctArtists(songs, 3);
-    title = "Your mix, made for you";
-    text = names.length ? `New music picked from how you listen, with ${joinNames(names)}.` : "New music picked from how you listen.";
-    label = "Play your mix";
-  } else if (fresh) {
-    title = "Let's find your sound";
-    text = "Search for a song or an artist you love.";
-  } else {
-    songs = data.recent;
-    const first = data.recent[0];
-    const others = distinctArtists(data.recent.slice(1), 3).filter((n) => n !== first?.artists[0]?.name).slice(0, 2);
-    title = "Pick up where you left off";
-    text = first
-      ? `You were listening to ${first.title} by ${first.artists[0]?.name ?? "someone"}${others.length ? `, with a bit of ${joinNames(others)} before that.` : "."}`
-      : "";
-    label = "Play your recent songs";
-  }
-  const art = songs.find((s) => s.artworkUrl)?.artworkUrl;
-  const theme = useArtworkColors(art);
-  const { ink, inkMuted } = theme ? inkFor(theme) : { ink: colors.text, inkMuted: colors.text2 };
-  const isCurrentList = songs.length > 0 && pb.queue.length === songs.length && sameList(pb.queue, songs);
-  const playingThis = isCurrentList && pb.playing;
+// Playing one card queues the whole shelf after it.
+function SongShelf({ title, subtitle, songs, width }: { title: string; subtitle?: string; songs: Song[]; width: number }) {
+  if (!songs.length) return null;
   return (
-    <View style={{ marginTop: 4, borderRadius: 20, overflow: "hidden", backgroundColor: theme?.color ?? colors.surface2 }}>
-      {art ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Image source={{ uri: sized(art, 900) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} />
-          <LinearGradient colors={["rgba(0,0,0,0)", theme?.color ?? colors.surface2]} locations={[0.1, 0.92]} style={StyleSheet.absoluteFill} />
-        </View>
-      ) : null}
-      <View style={{ paddingTop: art ? 190 : 44, paddingHorizontal: 20, paddingBottom: 20, gap: 6 }}>
-        <Text variant="caption2" weight={600} color={inkMuted} style={{ letterSpacing: 1.1, textTransform: "uppercase" }}>
-          {eyebrow}
-        </Text>
-        <Text variant="title1" color={ink}>
-          {title}
-        </Text>
-        {text ? (
-          <Text variant="subhead" color={inkMuted} numberOfLines={2}>
-            {text}
+    <Section title={title} subtitle={subtitle}>
+      <CardShelf itemWidth={width}>
+        {songs.map((s, i) => (
+          <SongCard key={`${s.id}-${i}`} song={s} list={songs} index={i} width={width} />
+        ))}
+      </CardShelf>
+    </Section>
+  );
+}
+
+function ArtistShelf({ title, artists }: { title: string; artists: ArtistCard[] }) {
+  if (!artists.length) return null;
+  return (
+    <Section title={title}>
+      <ArtistRow artists={artists} />
+    </Section>
+  );
+}
+
+// --- Heroes ---
+
+/** Your Spice for this part of the day, front and centre; without one, the recent-songs hero. */
+function SpiceHero({ recent }: { recent: Song[] }) {
+  const spices = useQuery({ queryKey: ["spices", "daily"], queryFn: Api.spicesWithDaily });
+  const label = useDailySpice()?.label;
+  const daily = spices.data?.find((s) => s.daily);
+  const ref: CollectionRef = { kind: "spice", id: "daily", name: label ?? daily?.name ?? "Your Spice" };
+  const loading = useIsLoading(ref);
+  if (spices.isError || (spices.data && !daily)) return <ResumeHero recent={recent} />;
+  if (!daily) return <HeroSkeletonShape />;
+  const name = label ?? daily.name;
+  return (
+    <Hero
+      kicker={`Your Spice · ${daily.daily!.part}`}
+      title={name}
+      text={`What you play ${whenPhrase(daily.daily!.part)}, made fresh for right now. Open it to see what's inside.`}
+      covers={daily.covers}
+      spiceName={name}
+      onPress={() => router.push(DAILY_SPICE_HREF as never)}
+      onLongPress={() => openCollectionMenu(ref, { subtitle: `Spice · ${daily.daily!.part}`, artwork: daily.covers[0] })}
+      actions={
+        <>
+          <PlayButton size={56} bg="#fff" fg="#141414" loading={loading} onPress={() => void runCollection(ref)} label={`Play ${name}`} />
+          <HeroPill label="Shuffle" icon="shuffle" onPress={() => void runCollection(ref, "shuffle")} />
+        </>
+      }
+    />
+  );
+}
+
+function ResumeHero({ recent }: { recent: Song[] }) {
+  const pb = usePlayback();
+  const last = recent[0];
+  if (!last) return <WelcomeHero />;
+  const others = [...new Set(recent.slice(1).flatMap((s) => s.artists.map((a) => a.name)))]
+    .filter((n) => n !== last.artists[0]?.name)
+    .slice(0, 2);
+  const isCurrent = pb.queue.length === recent.length && sameList(pb.queue, recent);
+  const playing = isCurrent && pb.playing;
+  const covers = [...new Set(recent.map((s) => s.artworkUrl).filter(Boolean) as string[])];
+  return (
+    <Hero
+      kicker="Pick up where you left off"
+      title={last.title}
+      text={`${last.artists[0]?.name ?? ""}${others.length ? `, with a bit of ${others.join(" and ")} before that.` : "."}`}
+      covers={covers}
+      onPress={() => router.push("/recent")}
+      onLongPress={() => openCollectionMenu({ kind: "recent", name: "Recently Played" }, { artwork: covers[0] })}
+      actions={
+        <>
+          <PlayButton
+            size={56}
+            bg="#fff"
+            fg="#141414"
+            playing={playing}
+            onPress={() => (isCurrent ? player.toggle() : player.play(recent, 0))}
+            label={playing ? "Pause" : "Play your recent songs"}
+          />
+          <Text variant="footnote" color="rgba(255,255,255,0.66)">
+            {plural(recent.length, "song")} you played lately
           </Text>
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 }}>
-          {fresh ? (
-            <Button
-              label="Start searching"
-              icon="search"
-              onPress={() => {
-                router.navigate("/search");
-                setTimeout(() => searchFocus.current?.(), 350);
-              }}
-            />
-          ) : (
-            <>
-              <Press
-                onPress={() => (isCurrentList ? player.toggle() : player.play(songs, 0))}
-                feedback={playingThis ? "toggleOff" : "toggleOn"}
-                scaleTo={0.95}
-                accessibilityLabel={playingThis ? "Pause" : label}
-                style={{ height: 40, paddingLeft: 14, paddingRight: 18, borderRadius: 20, backgroundColor: theme ? ink : colors.accent, flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Icon name={playingThis ? "pause" : "play"} size={20} color={theme ? theme.color : colors.accentInk} />
-                <Text variant="subhead" weight={600} color={theme ? theme.color : colors.accentInk}>
-                  {playingThis ? "Pause" : "Play"}
-                </Text>
-              </Press>
-              <Text variant="footnote" color={inkMuted}>
-                {plural(songs.length, "song")}
-              </Text>
-            </>
-          )}
-        </View>
-      </View>
-    </View>
+        </>
+      }
+    />
+  );
+}
+
+function WelcomeHero() {
+  return (
+    <Hero
+      kicker="Welcome to Harmoni"
+      title="Let's find your sound"
+      text="Search for a song or an artist you love."
+      covers={[]}
+      actions={
+        <HeroPill
+          label="Start searching"
+          icon="search"
+          onPress={() => {
+            router.navigate("/search");
+            setTimeout(() => searchFocus.current?.(), 350);
+          }}
+        />
+      }
+    />
   );
 }
