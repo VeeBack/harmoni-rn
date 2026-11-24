@@ -4,6 +4,7 @@ import { AppState } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 
 import type { QueueSong } from "@/api/types";
+import { sized } from "@/lib/art";
 import { onlineDevices, positionNow, useLink } from "@/link/link";
 import { deviceId } from "@/link/link";
 import { usePlayer, type PlaybackView } from "./player";
@@ -102,7 +103,8 @@ export function artworkColors(url: string): Promise<ArtworkColors | null> {
   if (colorCache.has(url)) return Promise.resolve(colorCache.get(url)!);
   let p = inflight.get(url);
   if (!p) {
-    p = Native.getArtworkColors(url).then((c) => {
+    // A small copy is plenty: native samples it down to 24px for the mean colour.
+    p = Native.getArtworkColors(sized(url, 256) ?? url).then((c) => {
       colorCache.set(url, c);
       inflight.delete(url);
       return c;

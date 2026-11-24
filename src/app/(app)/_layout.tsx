@@ -1,6 +1,7 @@
 import * as Network from "expo-network";
 import Native from "harmoni-player";
 import { kv } from "@/lib/storage";
+import { router } from "expo-router";
 import { Tabs } from "expo-router/js-tabs";
 import { BlurTargetView } from "expo-blur";
 import { useEffect, useRef, type ComponentRef } from "react";
@@ -14,6 +15,7 @@ import { sheetProgress } from "@/shell/sheet";
 import "@/player/remoteSession";
 import { NowPlaying } from "@/now-playing/NowPlaying";
 import { useLibrary } from "@/state/library";
+import { usePrefs } from "@/settings/prefs";
 import { useSession } from "@/state/session";
 import { toast } from "@/ui/overlays";
 import { colors } from "@/ui/theme";
@@ -32,6 +34,11 @@ export default function AppLayout() {
     Native.setCrossfade(kv.get("settings.crossfade", 0));
     restorePlayer();
     refreshMe();
+    // Settings › Look & feel › Open on.
+    const { openOn } = usePrefs.getState();
+    const tab = openOn === "last" ? kv.get<string>("lastTab", "(home)") : `(${openOn})`;
+    if (tab === "(search)") router.navigate("/search");
+    else if (tab === "(library)") router.navigate("/library" as never);
     useLibrary.getState().load();
     useDownloads.getState().load();
     flushPendingListens();

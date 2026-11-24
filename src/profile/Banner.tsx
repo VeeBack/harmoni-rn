@@ -4,9 +4,11 @@ import { LinearGradient as Fade } from "expo-linear-gradient";
 import { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 
-import type { ProfileBanner } from "@/api/types";
-import { colors } from "@/ui/theme";
+import type { BannerArtist, ProfileBanner } from "@/api/types";
+import { sized } from "@/lib/art";
+import { colors, bgAlpha } from "@/ui/theme";
 import { mediaUrl } from "./Avatar";
+import { bentoLayout, spread } from "./bento";
 import { alpha, shift } from "./style";
 
 /** Where a CSS `linear-gradient(<deg>deg, …)` starts and ends in a w×h box. */
@@ -29,6 +31,7 @@ export const Banner = memo(function Banner({
   width,
   height,
   fade = true,
+  artists,
 }: {
   kind: ProfileBanner | undefined;
   accent: string;
@@ -36,6 +39,8 @@ export const Banner = memo(function Banner({
   width: number;
   height: number;
   fade?: boolean;
+  /** Their favourite artists, for the "artists" banner. */
+  artists?: BannerArtist[];
 }) {
   const photo = kind === "image" ? mediaUrl(url) : undefined;
   return (
@@ -43,11 +48,12 @@ export const Banner = memo(function Banner({
       {photo ? (
         <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} cachePolicy="memory-disk" />
       ) : (
-        <Preset kind={kind === "image" ? "glow" : (kind ?? "glow")} accent={accent} w={width} h={height} />
+        <Preset kind={kind === "image" || kind === "artists" ? "glow" : (kind ?? "glow")} accent={accent} w={width} h={height} />
       )}
+      {kind === "artists" ? <ArtistBento artists={artists ?? []} accent={accent} w={width} h={height} mini={!fade} /> : null}
       {fade ? (
         <Fade
-          colors={["rgba(12,11,10,0)", colors.bg]}
+          colors={[bgAlpha(0), colors.bg]}
           style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: height * 0.45 }}
           pointerEvents="none"
         />
@@ -56,7 +62,91 @@ export const Banner = memo(function Banner({
   );
 });
 
-function Preset({ kind, accent: a, w, h }: { kind: Exclude<ProfileBanner, "image">; accent: string; w: number; h: number }) {
+/** `accent` mixed with the banner's near-black, `amount` of the way (CSS color-mix). */
+function shade(accent: string, amount: number): string {
+  const n = parseInt(accent.slice(1), 16);
+  const mix = (v: number) => Math.round(v * amount + 0x15 * (1 - amount));
+  return `rgb(${mix((n >> 16) & 255)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
+}
+
+/**
+ * "Top artists": their favourite artists' photos as a bento of big, wide,
+ * tall and small tiles, turned 30° and washed with their accent at the top.
+ * Until there are photos, the accent shows through in their place.
+ */
+const ArtistBento = memo(function ArtistBento({
+  artists,
+  accent,
+  w,
+  h,
+  mini,
+}: {
+  artists: BannerArtist[];
+  accent: string;
+  w: number;
+  h: number;
+  mini?: boolean;
+}) {
+  const tile = mini ? 16 : 84;
+  const layout = useMemo(
+    () => bentoLayout({ width: w, height: h, tile, gap: mini ? 3 : 7, count: mini ? 40 : 72, box: mini ? { w: 280, h: 220 } : undefined }),
+    [w, h, tile, mini],
+  );
+  const order = useMemo(() => spread(artists), [artists]);
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
+      <View
+        style={{
+          position: "absolute",
+          left: w / 2 - layout.box.w / 2,
+          top: h / 2 - layout.box.h / 2,
+          width: layout.box.w,
+          height: layout.box.h,
+          transform: [{ rotate: "30deg" }],
+        }}
+      >
+        {layout.tiles.map((t) => {
+          const artist = order.length ? order[t.i % order.length] : undefined;
+          return (
+            <View
+              key={t.i}
+              style={{
+                position: "absolute",
+                left: t.x,
+                top: t.y,
+                width: t.w,
+                height: t.h,
+                borderRadius: tile / 7,
+                overflow: "hidden",
+                backgroundColor: isHex(accent) ? shade(accent, (18 + ((t.i * 37) % 40)) / 100) : "#151515",
+              }}
+            >
+              {artist ? (
+                <Image
+                  source={{ uri: sized(artist.imageUrl, Math.max(t.w, t.h) * (mini ? 2 : 3)) }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={240}
+                  cachePolicy="memory-disk"
+                  recyclingKey={`${artist.id}-${t.i}`}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+      <Fade
+        colors={mini ? ["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"] : [isHex(accent) ? alpha(accent, 0.3) : "rgba(0,0,0,0)", "rgba(0,0,0,0.25)"]}
+        locations={mini ? [0.3, 1] : [0, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
+});
+
+const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
+
+function Preset({ kind, accent: a, w, h }: { kind: Exclude<ProfileBanner, "image" | "artists">; accent: string; w: number; h: number }) {
   const stripes = useMemo(() => {
     if (kind !== "stripes") return null;
     // repeating-linear-gradient(-45deg, accent 0 18px, transparent 18px 36px)

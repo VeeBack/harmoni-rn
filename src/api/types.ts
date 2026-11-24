@@ -201,7 +201,14 @@ export interface UserCard {
 }
 
 export type ProfileFont = "default" | "serif" | "elegant" | "grotesk" | "display" | "rounded" | "mono" | "condensed" | "script" | "pixel";
-export type ProfileBanner = "glow" | "aurora" | "sunset" | "tide" | "stripes" | "dots" | "grid" | "plain" | "image";
+export type ProfileBanner = "glow" | "aurora" | "sunset" | "tide" | "stripes" | "dots" | "grid" | "plain" | "artists" | "image";
+
+/** One of someone's favourite artists, for the "artists" banner. */
+export interface BannerArtist {
+  id: string;
+  name: string;
+  imageUrl: string;
+}
 
 export interface Profile {
   user: UserCard;
@@ -211,6 +218,8 @@ export interface Profile {
   font: ProfileFont;
   banner: ProfileBanner;
   bannerUrl?: string;
+  /** When banner is "artists" (always on your own): up to 12, favourite first. */
+  topArtists?: BannerArtist[];
   followers: number;
   following: number;
   pinned: Song[];
@@ -248,6 +257,8 @@ export interface Invite {
 
 export interface ImportProgress {
   id: string;
+  /** Missing on imports from before Spotify: Apple. */
+  source?: "apple" | "spotify";
   status: "adding" | "improving" | "done" | "failed" | "cancelled";
   total: number;
   done: number;
@@ -259,6 +270,8 @@ export interface ImportProgress {
     liked: number;
     playlists: { name: string; songs: number }[];
     listening: number;
+    /** Spotify: plays brought in, one by one, from their history. */
+    listens?: number;
     appliedAt: string;
     missing?: { title: string; artist: string }[];
   };

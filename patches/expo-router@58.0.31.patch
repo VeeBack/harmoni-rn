@@ -25,26 +25,27 @@ index 8d49ccae37a4a4c7a6bd0dda0f95f36083d018d0..40f11bc40631343f12460e6e7ef63ca4
              hitSlop: {
                  top: -layout.height + distance
              },
-@@ -39,8 +40,10 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+@@ -39,8 +40,11 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
          const invertedMultiplier = (0, _getInvertedMultiplier.getInvertedMultiplier)(gestureDirection, direction === 'rtl');
          if (invertedMultiplier === 1) {
              return {
 -                minOffsetX: 5,
 -                maxDeltaY: 20,
 +                // react-native-gesture-handler 3 dropped minOffsetX/maxDeltaY: without these the
-+                // back swipe takes vertical drags too, and pushed screens can't scroll.
-+                activeOffsetX: 5,
++                // back swipe takes vertical drags too, and pushed screens can't scroll. 16, past
++                // Android's touch slop (8dp), so a sideways list that can scroll claims it first.
++                activeOffsetX: 16,
 +                failOffsetY: [-20, 20],
                  hitSlop: {
                      right: hitSlop
                  },
-@@ -48,8 +51,8 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
+@@ -48,8 +52,8 @@ const gestureActivationCriteria = ({ direction, gestureDirection, gestureRespons
              };
          } else {
              return {
 -                minOffsetX: -5,
 -                maxDeltaY: 20,
-+                activeOffsetX: -5,
++                activeOffsetX: -16,
 +                failOffsetY: [-20, 20],
                  hitSlop: {
                      left: hitSlop

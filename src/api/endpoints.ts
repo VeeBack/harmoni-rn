@@ -1,3 +1,5 @@
+import type { ImportLibrary } from "@/lib/import-library";
+
 import { api } from "./client";
 import type {
   Album,
@@ -70,6 +72,8 @@ export const Api = {
 
   /** Your custom Spices, without the Daily Spice (the library shows that on its own). */
   spices: () => api<SpiceCard[]>("/api/spices?daily=false"),
+  /** With the Daily Spice first (and its covers), for Home's hero. */
+  spicesWithDaily: () => api<SpiceCard[]>("/api/spices"),
   createSpice: (seedIds: string[], name?: string) =>
     api<SpiceCard>("/api/spices", { method: "POST", body: { seedIds, name }, timeoutMs: 60_000 }),
   spiceSuggestions: () => api<Song[]>("/api/spices/suggestions"),
@@ -85,7 +89,7 @@ export const Api = {
   autoplay: (seeds: string[], exclude: string[]) =>
     api<Song[]>("/api/autoplay", { method: "POST", body: { seeds, exclude }, timeoutMs: 30_000 }),
 
-  startImport: (library: AppleLibrary) => api<ImportProgress>("/api/import", { method: "POST", body: library, timeoutMs: 120_000 }),
+  startImport: (library: AppleLibrary | ImportLibrary) => api<ImportProgress>("/api/import", { method: "POST", body: library, timeoutMs: 120_000 }),
   importProgress: () => api<ImportProgress | null>("/api/import"),
   stopImport: () => api<ImportProgress | null>("/api/import", { method: "DELETE" }),
 

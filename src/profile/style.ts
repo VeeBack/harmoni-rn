@@ -42,6 +42,7 @@ export const BANNERS: { key: Exclude<ProfileBanner, "image">; label: string }[] 
   { key: "dots", label: "Dots" },
   { key: "grid", label: "Grid" },
   { key: "plain", label: "Plain" },
+  { key: "artists", label: "Top artists" },
 ];
 
 export const BIO_MAX = 300;

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { create } from "zustand";
 
 import { haptic } from "@/lib/haptics";
+import { kv } from "@/lib/storage";
 import { usePlayback, usePlayingOn, useProgress } from "@/player/hooks";
 import { player } from "@/player/player";
 import { Artwork } from "@/ui/Artwork";
@@ -25,6 +26,7 @@ import { Material } from "@/ui/Material";
 import { Press } from "@/ui/Press";
 import { Spinner } from "@/ui/Spinner";
 import { Text } from "@/ui/Text";
+import { iosShadow } from "@/ui/shadow";
 import { colors, spring } from "@/ui/theme";
 import { MINI, TABS } from "./layout";
 import { sheetProgress } from "./sheet";
@@ -55,6 +57,11 @@ export function Dock({ target }: { target: RefObject<ComponentRef<typeof View> |
   const props = useTabBarProps((s) => s.props);
   const insets = useSafeAreaInsets();
   const { song } = usePlayback();
+  // Where you were, for Settings › Look & feel › Open on › Where you left off.
+  const tabName = props?.state.routes[props.state.index]?.name;
+  useEffect(() => {
+    if (tabName) kv.set("lastTab", tabName);
+  }, [tabName]);
   if (!props) return null;
   const { state, emitter, navigateToTab } = props;
   return (
@@ -267,7 +274,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.08)",
   },
-  miniArt: { borderRadius: 8, elevation: 6, shadowColor: "#000" },
+  miniArt: { borderRadius: 8, elevation: 6, shadowColor: "#000", ...iosShadow(6) },
   miniBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   progressTrack: {
     position: "absolute",

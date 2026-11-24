@@ -22,12 +22,12 @@ export function LikedArt({ size = 72 }: { size?: number }) {
 }
 
 /** A playlist's cover from its first four different covers. */
-export function Collage({ urls }: { urls: string[] }) {
+export function Collage({ urls, px = 400 }: { urls: string[]; px?: number }) {
   return (
     <View style={[StyleSheet.absoluteFill, { flexDirection: "row", flexWrap: "wrap" }]}>
       {urls.slice(0, 4).map((u, i) => (
         <View key={i} style={{ width: "50%", height: "50%" }}>
-          <Artwork url={u} radius={0} px={400} />
+          <Artwork url={u} radius={0} px={px} />
         </View>
       ))}
     </View>
@@ -35,10 +35,10 @@ export function Collage({ urls }: { urls: string[] }) {
 }
 
 /** Downloads' cover: the download mark on a quiet fill. */
-export function DownloadsArt() {
+export function DownloadsArt({ size = 72 }: { size?: number }) {
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface3, alignItems: "center", justifyContent: "center" }]}>
-      <Icon name="download-solid" size={72} color={colors.accent} />
+      <Icon name="download-solid" size={size} color={colors.accent} />
     </View>
   );
 }

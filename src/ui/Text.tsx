@@ -41,3 +41,12 @@ export const Text = memo(function Text({ variant, size, weight, color = colors.t
     />
   );
 });
+
+/** Small caps over a title, as the web sets them: "PLAYLIST", "YOUR SPICE · MORNING". */
+export const Kicker = memo(function Kicker({ children, color = colors.text2, style, ...rest }: Omit<Props, "variant">) {
+  return (
+    <Text variant="kicker" color={color} numberOfLines={1} {...rest} style={[{ textTransform: "uppercase" }, style]}>
+      {children}
+    </Text>
+  );
+});
