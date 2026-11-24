@@ -393,9 +393,11 @@ final class Player: NSObject {
   private func makeItem(_ e: Entry) -> AVPlayerItem {
     let item = bareItem(e)
     item.preferredForwardBufferDuration = 0 // let AVFoundation decide
+    let known = e.durationMs
     let status = item.observe(\.status, options: [.new]) { [weak self, weak item] _, _ in
       DispatchQueue.main.async {
         guard let self, let item else { return }
+        if item.status == .readyToPlay { Player.endAtKnownLength(item, known) }
         self.itemStatusChanged(item)
       }
     }
@@ -408,6 +410,19 @@ final class Player: NSObject {
       self.meterLock.unlock()
     }
     return item
+  }
+
+  /// A stream sent without a length (the server still fetching the song) gets a duration that
+  /// AVFoundation guesses from the bitrate and never corrects: it has been twice the real one.
+  /// At the real end AVPlayer then waits for bytes that never come instead of ending the item.
+  /// When the guess is off by more than 10% (the same test as `durationMs`), end the item at
+  /// the catalogue's length, so it ends, and the next song starts, on time and gapless.
+  private static func endAtKnownLength(_ item: AVPlayerItem, _ known: Double?) {
+    guard let known, known > 0, !item.forwardPlaybackEndTime.isValid else { return }
+    let d = item.duration
+    let guessed = !d.isNumeric || abs(d.seconds * 1000 - known) > known * 0.1
+    guard guessed else { return }
+    item.forwardPlaybackEndTime = CMTime(value: Int64(known), timescale: 1000)
   }
 
   /// Stops watching an item that's leaving AVQueuePlayer.
@@ -711,11 +726,10 @@ final class Player: NSObject {
 
   /// Every 250 ms: move on from a song whose audio ran out before AVFoundation thinks it ends.
   ///
-  /// A stream sent without a length (the server still fetching the song) gets a guessed
-  /// duration that can be twice the real one. When the real audio runs out, AVPlayer doesn't
-  /// end the item: it waits for bytes that never come, showing as playing with the playhead
-  /// stuck at the end, until it gives up much later. So: within 2 s of the catalogue's end
-  /// and the playhead hasn't moved for 1.5 s while it should be playing, the song ended.
+  /// The backup for `endAtKnownLength`: when the catalogue's length is a little longer than the
+  /// audio, the audio runs out just before the end we set, and AVPlayer waits for bytes that
+  /// never come. So: within 2 s of the catalogue's end and the playhead hasn't moved for 1 s
+  /// while it should be playing, the song ended.
   private func checkStuckAtEnd() {
     guard playWhenReady, !ended, fader == nil, pendingSeekMs == nil, !rebuilding,
           let item = av.currentItem, item.status == .readyToPlay,
@@ -734,7 +748,7 @@ final class Player: NSObject {
       stuckSince = Date()
       return
     }
-    guard Date().timeIntervalSince(stuckSince) >= 1.5 else { return }
+    guard Date().timeIntervalSince(stuckSince) >= 1 else { return }
     stuckAtMs = -1
     if nextItem != nil {
       av.advanceToNextItem() // currentItemChanged takes it from here
