@@ -85,6 +85,7 @@ final class Player: NSObject {
       }
       Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
         self?.checkCrossfade()
+        self?.checkStuckAtEnd()
       }
     }
   }
@@ -704,6 +705,43 @@ final class Player: NSObject {
   private var crossfadedKey: String?
   /// The ending song, readied in a second player ahead of the fade.
   private var prepared: (key: String, player: AVPlayer, started: Bool)?
+
+  private var stuckSince = Date()
+  private var stuckAtMs: Double = -1
+
+  /// Every 250 ms: move on from a song whose audio ran out before AVFoundation thinks it ends.
+  ///
+  /// A stream sent without a length (the server still fetching the song) gets a guessed
+  /// duration that can be twice the real one. When the real audio runs out, AVPlayer doesn't
+  /// end the item: it waits for bytes that never come, showing as playing with the playhead
+  /// stuck at the end, until it gives up much later. So: within 2 s of the catalogue's end
+  /// and the playhead hasn't moved for 1.5 s while it should be playing, the song ended.
+  private func checkStuckAtEnd() {
+    guard playWhenReady, !ended, fader == nil, pendingSeekMs == nil, !rebuilding,
+          let item = av.currentItem, item.status == .readyToPlay,
+          let known = current?.durationMs, known > 0 else {
+      stuckAtMs = -1
+      return
+    }
+    let t = av.currentTime()
+    let pos = t.isNumeric ? t.seconds * 1000 : 0
+    guard pos >= known - 2000 else {
+      stuckAtMs = -1
+      return
+    }
+    if abs(pos - stuckAtMs) >= 50 {
+      stuckAtMs = pos
+      stuckSince = Date()
+      return
+    }
+    guard Date().timeIntervalSince(stuckSince) >= 1.5 else { return }
+    stuckAtMs = -1
+    if nextItem != nil {
+      av.advanceToNextItem() // currentItemChanged takes it from here
+    } else {
+      itemEnded()
+    }
+  }
 
   /// Every 250 ms: get ready for a crossfade, or start one.
   private func checkCrossfade() {
